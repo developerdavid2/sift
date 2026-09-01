@@ -1,0 +1,21 @@
+{
+  "name": "@sift/backend",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "scripts": {
+    "dev": "convex dev",
+    "dev:setup": "convex dev --configure --until-success"
+  },
+  "dependencies": {
+    "convex": "^1.45.0",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@sift/config": "*",
+    "@types/node": "^26.2.0",
+    "typescript": "^6.0.3"
+  }
+}
