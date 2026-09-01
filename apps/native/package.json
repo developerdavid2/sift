@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@clerk/expo": "^4.5.2",
+    "@expo-google-fonts/manrope": "^0.4.2",
     "@expo/metro-runtime": "~57.0.12",
     "@expo/vector-icons": "^15.1.1",
     "@gorhom/bottom-sheet": "^5.2.14",

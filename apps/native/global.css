@@ -1,3 +1,428 @@
 @import "tailwindcss";
 @import "uniwind";
 @import "heroui-native/styles";
+
+/* ------------------------------------------------------------
+   Fonts
+   ------------------------------------------------------------ */
+@theme {
+  --font-normal: "Manrope_400Regular";
+  --font-medium: "Manrope_500Medium";
+  --font-semibold: "Manrope_600SemiBold";
+  --font-bold: "Manrope_700Bold";
+  --font-sans: "Manrope_400Regular", sans-serif;
+}
+
+/* ============================================================
+   Sift Design Tokens
+
+   Follows the official heroui-native pattern:
+     1. Raw vars in @layer theme { @variant light/dark { ... } }
+        → the single source of truth for every color value.
+     2. Mapped to Tailwind utilities via @theme inline static.
+        → powers bg-*, text-*, border-*, shadow-* classes.
+     3. useThemeColor reads the same vars at runtime.
+        → powers useThemeColors() in lib/theme.ts.
+
+   To change any color: edit the raw var in @layer theme.
+   Everything downstream (classes + hook) updates automatically.
+
+   Two interaction tiers, deliberately kept distinct:
+     -hover   → for pointer devices only (rare on mobile, kept
+                for completeness / tablet trackpad use)
+     -pressed → the real mobile tap-down state. Every semantic
+                color has one. Buttons and chips should bind
+                their `active:` state to *-pressed, not *-hover.
+   ============================================================ */
+
+@layer theme {
+  :root {
+    /* ------------------------------------------------------------------
+       Primitives (mode-agnostic)
+       ------------------------------------------------------------------ */
+    --white: #ffffff;
+    --black: #000000;
+
+    /* ------------------------------------------------------------------
+       Light theme
+       ------------------------------------------------------------------ */
+    @variant light {
+      /* Base */
+      --background: #fafafa;
+      --foreground: #1a1a2e;
+
+      /* Surfaces */
+      --surface: #ffffff;
+      --surface-foreground: var(--foreground);
+      --surface-secondary: #f5f5f5;
+      --surface-secondary-foreground: var(--foreground);
+      --surface-tertiary: #efefef;
+      --surface-tertiary-foreground: var(--foreground);
+
+      /* Overlay */
+      --overlay: var(--surface);
+      --overlay-foreground: var(--foreground);
+      --backdrop: rgba(0, 0, 0, 0.24);
+
+      /* Muted */
+      --muted: #6b7280;
+
+      /* Default (neutrals) */
+      --default: #f0f0f0;
+      --default-foreground: var(--foreground);
+
+      /* Brand — indigo. This IS accent; kept as a semantic alias,
+         not a second color, so it can never drift out of sync. */
+      --accent: #4f46e5;
+      --accent-foreground: #ffffff;
+
+      /* Form fields */
+      --field-background: var(--surface);
+      --field-foreground: var(--foreground);
+      --field-placeholder: var(--muted);
+      --field-border: transparent;
+
+      /* Status */
+      --success: #10b981;
+      --success-foreground: #ffffff;
+      --warning: #f59e0b;
+      --warning-foreground: #1a1a2e;
+      --danger: #ef4444;
+      --danger-foreground: #ffffff;
+
+      /* Component */
+      --segment: var(--surface);
+      --segment-foreground: var(--foreground);
+
+      /* Misc */
+      --border: #e5e5ea;
+      --separator: #d4d4d8;
+      --focus: var(--accent);
+      --link: var(--foreground);
+
+      /* Shadows */
+      --surface-shadow:
+        0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 2px 6px 0 rgba(0, 0, 0, 0.04);
+      --overlay-shadow:
+        0 2px 8px 0 rgba(0, 0, 0, 0.04), 0 14px 32px 0 rgba(0, 0, 0, 0.08);
+      --field-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+
+      /* Sift custom — urgency system */
+      --urgent: #ef4444;
+      --urgent-foreground: #ffffff;
+      --today: #f59e0b;
+      --today-foreground: #1a1a2e;
+      --later: #9ca3af;
+      --later-foreground: #ffffff;
+    }
+
+    /* ------------------------------------------------------------------
+       Dark theme — deep blue-black ink, not pure black
+       ------------------------------------------------------------------ */
+    @variant dark {
+      /* Base */
+      --background: #0f0f1a;
+      --foreground: #f5f5f7;
+
+      /* Surfaces */
+      --surface: #1a1a2e;
+      --surface-foreground: var(--foreground);
+      --surface-secondary: #22223a;
+      --surface-secondary-foreground: var(--foreground);
+      --surface-tertiary: #2a2a42;
+      --surface-tertiary-foreground: var(--foreground);
+
+      /* Overlay */
+      --overlay: var(--surface);
+      --overlay-foreground: var(--foreground);
+      --backdrop: rgba(0, 0, 0, 0.4);
+
+      /* Muted */
+      --muted: #a1a1aa;
+
+      /* Default (neutrals) */
+      --default: #2e2e45;
+      --default-foreground: var(--foreground);
+
+      /* Brand — lighter indigo for dark-mode contrast. Still just accent. */
+      --accent: #6366f1;
+      --accent-foreground: #ffffff;
+
+      /* Form fields */
+      --field-background: var(--surface);
+      --field-foreground: var(--foreground);
+      --field-placeholder: var(--muted);
+      --field-border: transparent;
+
+      /* Status */
+      --success: #34d399;
+      --success-foreground: #0f0f1a;
+      --warning: #fbbf24;
+      --warning-foreground: #0f0f1a;
+      --danger: #f87171;
+      --danger-foreground: #0f0f1a;
+
+      /* Component */
+      --segment: #2e2e45;
+      --segment-foreground: var(--foreground);
+
+      /* Misc */
+      --border: #2e2e45;
+      --separator: #3f3f5a;
+      --focus: var(--accent);
+      --link: var(--foreground);
+
+      /* Shadows */
+      --surface-shadow: 0 0 0 0 transparent inset;
+      --overlay-shadow: 0 0 1px 0 rgba(255, 255, 255, 0.1) inset;
+      --field-shadow: 0 0 0 0 transparent inset;
+
+      /* Sift custom — urgency system */
+      --urgent: #f87171;
+      --urgent-foreground: #ffffff;
+      --today: #fbbf24;
+      --today-foreground: #0f0f1a;
+      --later: #71717a;
+      --later-foreground: #ffffff;
+    }
+  }
+}
+
+/* ============================================================
+   Tailwind + useThemeColor bridge
+
+   Maps raw vars → --color-* utilities so both bg-* classes
+   and useThemeColor("colorName") resolve to the same values.
+
+   Naming convention, applied consistently for every semantic color:
+     --color-{name}                 resting background
+     --color-{name}-foreground      text/icon on top of it
+     --color-{name}-hover           pointer-hover state (rare on mobile)
+     --color-{name}-pressed         native tap-down state — USE THIS
+                                     for `active:` classes
+     --color-{name}-soft            low-opacity tint background
+     --color-{name}-soft-foreground text on top of the soft tint
+     --color-{name}-soft-hover      pointer-hover on the soft tint
+   ============================================================ */
+@theme inline static {
+  /* --- base tokens --------------------------------------------------- */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-secondary-foreground: var(--surface-secondary-foreground);
+  --color-surface-tertiary: var(--surface-tertiary);
+  --color-surface-tertiary-foreground: var(--surface-tertiary-foreground);
+
+  --color-overlay: var(--overlay);
+  --color-overlay-foreground: var(--overlay-foreground);
+  --color-backdrop: var(--backdrop);
+
+  --color-muted: var(--muted);
+
+  --color-default: var(--default);
+  --color-default-foreground: var(--default-foreground);
+  --color-default-hover: color-mix(
+    in oklab,
+    var(--default) 96%,
+    var(--default-foreground) 4%
+  );
+  --color-default-pressed: color-mix(
+    in oklab,
+    var(--default) 90%,
+    var(--default-foreground) 10%
+  );
+
+  /* --- accent / brand (same color, one set of tokens) ----------------- */
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-hover: color-mix(
+    in oklab,
+    var(--accent) 90%,
+    var(--accent-foreground) 10%
+  );
+  --color-accent-pressed: color-mix(
+    in oklab,
+    var(--accent) 82%,
+    var(--accent-foreground) 18%
+  );
+  --color-accent-soft: color-mix(in oklab, var(--accent) 15%, transparent);
+  --color-accent-soft-foreground: var(--accent);
+  --color-accent-soft-hover: color-mix(
+    in oklab,
+    var(--accent) 20%,
+    transparent
+  );
+
+  /* brand-primary-* are pure aliases of accent-* — never computed
+     separately, so they can't drift out of sync with each other. */
+  --color-brand-primary: var(--color-accent);
+  --color-brand-primary-foreground: var(--color-accent-foreground);
+  --color-brand-primary-hover: var(--color-accent-hover);
+  --color-brand-primary-pressed: var(--color-accent-pressed);
+  --color-brand-primary-soft: var(--color-accent-soft);
+  --color-brand-primary-soft-foreground: var(--color-accent-soft-foreground);
+
+  /* --- form fields --------------------------------------------------- */
+  --color-field: var(--field-background, var(--default));
+  --color-field-foreground: var(--field-foreground, var(--foreground));
+  --color-field-placeholder: var(--field-placeholder, var(--muted));
+  --color-field-border: var(--field-border, var(--border));
+
+  /* --- status ---------------------------------------------------------
+     Every status color gets the full set: hover, pressed, soft,
+     soft-foreground, soft-hover. Keeps buttons, chips, and banners
+     all correct without one-off overrides anywhere else. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-hover: color-mix(
+    in oklab,
+    var(--success) 90%,
+    var(--success-foreground) 10%
+  );
+  --color-success-pressed: color-mix(
+    in oklab,
+    var(--success) 82%,
+    var(--success-foreground) 18%
+  );
+  --color-success-soft: color-mix(in oklab, var(--success) 15%, transparent);
+  --color-success-soft-foreground: var(--success);
+  --color-success-soft-hover: color-mix(
+    in oklab,
+    var(--success) 20%,
+    transparent
+  );
+
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-hover: color-mix(
+    in oklab,
+    var(--warning) 90%,
+    var(--warning-foreground) 10%
+  );
+  --color-warning-pressed: color-mix(
+    in oklab,
+    var(--warning) 82%,
+    var(--warning-foreground) 18%
+  );
+  --color-warning-soft: color-mix(in oklab, var(--warning) 15%, transparent);
+  --color-warning-soft-foreground: var(--warning);
+  --color-warning-soft-hover: color-mix(
+    in oklab,
+    var(--warning) 20%,
+    transparent
+  );
+
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-hover: color-mix(
+    in oklab,
+    var(--danger) 90%,
+    var(--danger-foreground) 10%
+  );
+  --color-danger-pressed: color-mix(
+    in oklab,
+    var(--danger) 82%,
+    var(--danger-foreground) 18%
+  );
+  --color-danger-soft: color-mix(in oklab, var(--danger) 15%, transparent);
+  --color-danger-soft-foreground: var(--danger);
+  --color-danger-soft-hover: color-mix(
+    in oklab,
+    var(--danger) 20%,
+    transparent
+  );
+
+  /* --- misc ---------------------------------------------------------- */
+  --color-segment: var(--segment);
+  --color-segment-foreground: var(--segment-foreground);
+  --color-border: var(--border);
+  --color-separator: var(--separator);
+  --color-focus: var(--focus);
+  --color-link: var(--link);
+
+  --color-background-secondary: color-mix(
+    in oklab,
+    var(--background) 96%,
+    var(--foreground) 4%
+  );
+  --color-background-tertiary: color-mix(
+    in oklab,
+    var(--background) 92%,
+    var(--foreground) 8%
+  );
+  --color-background-inverse: var(--foreground);
+
+  --color-separator-secondary: color-mix(
+    in oklab,
+    var(--surface) 85%,
+    var(--surface-foreground) 15%
+  );
+  --color-separator-tertiary: color-mix(
+    in oklab,
+    var(--surface) 81%,
+    var(--surface-foreground) 19%
+  );
+  --color-border-secondary: color-mix(
+    in oklab,
+    var(--surface) 78%,
+    var(--surface-foreground) 22%
+  );
+  --color-border-tertiary: color-mix(
+    in oklab,
+    var(--surface) 66%,
+    var(--surface-foreground) 34%
+  );
+
+  /* --- Sift: urgency system -------------------------------------------
+     These are tappable (filter chips), so they get hover + pressed too,
+     same as any other interactive semantic color. */
+  --color-urgent: var(--urgent);
+  --color-urgent-foreground: var(--urgent-foreground);
+  --color-urgent-hover: color-mix(
+    in oklab,
+    var(--urgent) 90%,
+    var(--urgent-foreground) 10%
+  );
+  --color-urgent-pressed: color-mix(
+    in oklab,
+    var(--urgent) 82%,
+    var(--urgent-foreground) 18%
+  );
+  --color-urgent-soft: color-mix(in oklab, var(--urgent) 14%, transparent);
+
+  --color-today: var(--today);
+  --color-today-foreground: var(--today-foreground);
+  --color-today-hover: color-mix(
+    in oklab,
+    var(--today) 90%,
+    var(--today-foreground) 10%
+  );
+  --color-today-pressed: color-mix(
+    in oklab,
+    var(--today) 82%,
+    var(--today-foreground) 18%
+  );
+  --color-today-soft: color-mix(in oklab, var(--today) 14%, transparent);
+
+  --color-later: var(--later);
+  --color-later-foreground: var(--later-foreground);
+  --color-later-hover: color-mix(
+    in oklab,
+    var(--later) 90%,
+    var(--later-foreground) 10%
+  );
+  --color-later-pressed: color-mix(
+    in oklab,
+    var(--later) 82%,
+    var(--later-foreground) 18%
+  );
+  --color-later-soft: color-mix(in oklab, var(--later) 12%, transparent);
+
+  /* --- shadows --------------------------------------------------------
+     Not colors — consumed only via the `shadow-sm` className directly,
+     never through useThemeColor. */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.06), 0 2px 6px 0 rgba(0, 0, 0, 0.05);
+}
