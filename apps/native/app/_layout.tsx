@@ -13,11 +13,13 @@ import { env } from "@sift/env/native";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { Stack } from "expo-router";
+import { NavigationBar } from "expo-navigation-bar";
+import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
-import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { AppThemeProvider, useAppTheme } from "@/contexts/app-theme-context";
 
 export const unstable_settings = {
   initialRouteName: "index",
@@ -26,6 +28,18 @@ export const unstable_settings = {
 const convex = new ConvexReactClient(env.EXPO_PUBLIC_CONVEX_URL, {
   unsavedChangesWarning: false,
 });
+
+function SystemBars() {
+  const { isLight } = useAppTheme();
+  const barContentStyle = isLight ? "dark" : "light";
+
+  return (
+    <>
+      <StatusBar style={barContentStyle} />
+      <NavigationBar style={barContentStyle} />
+    </>
+  );
+}
 
 function StackLayout() {
   return (
@@ -63,6 +77,7 @@ export default function Layout() {
           <KeyboardProvider>
             <AppThemeProvider>
               <HeroUINativeProvider>
+                <SystemBars />
                 <StackLayout />
               </HeroUINativeProvider>
             </AppThemeProvider>
