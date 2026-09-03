@@ -43,8 +43,7 @@
       [
         "expo-navigation-bar",
         {
-          "enforceContrast": false,
-          "style": "dark"
+          "enforceContrast": false
         }
       ]
     ],

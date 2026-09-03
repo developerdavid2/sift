@@ -108,14 +108,6 @@ const SWATCHES: { name: string; className: string }[] = [
   { name: "danger", className: "bg-danger" },
 ];
 
-// Chip ships a first-class `color` prop (accent | default | success |
-// warning | danger) with correct resting AND pressed styling built
-// in — urgent and today are just danger/warning by another name in
-// this palette, so there's nothing to reinvent here. The small dot is
-// still driven by our own urgent/today/later tokens, since that's a
-// plain decorative View, not something Chip's color system reaches —
-// keeping it separate also leaves room to give the dot its own shade
-// later without touching the chip's semantics.
 const URGENCY: {
   level: string;
   color: "danger" | "warning" | "default";
@@ -127,7 +119,6 @@ const URGENCY: {
 ];
 
 export default function DesignSystemScreen() {
-  const insets = useSafeAreaInsets();
   const { isLight, toggleTheme } = useAppTheme();
   const [inputValue, setInputValue] = useState("");
   const [vipEnabled, setVipEnabled] = useState(false);
@@ -167,324 +158,303 @@ export default function DesignSystemScreen() {
   }, []);
 
   return (
-    <Container>
-      <View style={themedStyles.screen}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Text style={themedStyles.headerTitle}>Sift Design</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Text
-              style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}
-            >
-              {isLight ? "Light" : "Dark"}
-            </Text>
-            <Switch isSelected={!isLight} onSelectedChange={toggleTheme} />
+    <View style={themedStyles.screen}>
+      {/* Header */}
+      <View style={[styles.header]}>
+        <Text style={themedStyles.headerTitle}>Sift Design</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text
+            style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}
+          >
+            {isLight ? "Light" : "Dark"}
+          </Text>
+          <Switch isSelected={!isLight} onSelectedChange={toggleTheme} />
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Colors */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="color-palette-outline"
+              size={16}
+              color={colors.brandPrimary}
+            />
+            <Text style={themedStyles.sectionTitle}>Color Tokens</Text>
+          </View>
+          <View style={styles.colorRow}>
+            {SWATCHES.map((swatch) => (
+              <View
+                key={swatch.name}
+                className="border-border border"
+                style={styles.swatch}
+              >
+                <View className={swatch.className} style={styles.swatchColor} />
+                <View
+                  className="bg-surface-secondary"
+                  style={styles.swatchLabel}
+                >
+                  <Text
+                    style={{
+                      color: colors.muted,
+                      fontSize: 11,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {swatch.name}
+                  </Text>
+                </View>
+              </View>
+            ))}
           </View>
         </View>
 
-        <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 48 }}
-        >
-          {/* Colors */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="color-palette-outline"
-                size={16}
-                color={colors.brandPrimary}
-              />
-              <Text style={themedStyles.sectionTitle}>Color Tokens</Text>
-            </View>
-            <View style={styles.colorRow}>
-              {SWATCHES.map((swatch) => (
-                <View
-                  key={swatch.name}
-                  className="border-border border"
-                  style={styles.swatch}
-                >
-                  <View
-                    className={swatch.className}
-                    style={styles.swatchColor}
-                  />
-                  <View
-                    className="bg-surface-secondary"
-                    style={styles.swatchLabel}
-                  >
-                    <Text
-                      style={{
-                        color: colors.muted,
-                        fontSize: 11,
-                        fontWeight: "600",
-                      }}
-                    >
-                      {swatch.name}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Urgency system */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="pulse-outline"
-                size={16}
-                color={colors.brandPrimary}
-              />
-              <Text style={themedStyles.sectionTitle}>Urgency System</Text>
-            </View>
-            <View style={styles.urgencyRow}>
-              {URGENCY.map((u) => (
-                <Chip key={u.level} variant="soft" color={u.color}>
-                  <View className={`w-2 h-2 rounded-full ${u.dotClass}`} />
-                  <Chip.Label>{u.level}</Chip.Label>
-                </Chip>
-              ))}
-            </View>
-          </View>
-
-          {/* Typography */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="text-outline"
-                size={16}
-                color={colors.brandPrimary}
-              />
-              <Text style={themedStyles.sectionTitle}>
-                Typography · Manrope
-              </Text>
-            </View>
-            <Text
-              className="text-foreground font-bold text-3xl"
-              style={{ fontFamily: "Manrope_800ExtraBold" }}
-            >
-              A quiet inbox.
-            </Text>
-            <Text
-              className="text-surface-foreground text-lg font-semibold"
-              style={{ fontFamily: "Manrope_700Bold" }}
-            >
-              Priority, without the noise.
-            </Text>
-            <Text
-              className="text-muted text-base"
-              style={{ fontFamily: "Manrope_400Regular", lineHeight: 24 }}
-            >
-              This is body text in Manrope Regular. Sift watches your inbox and
-              tells you only what matters — a deadline, an offer, a message from
-              someone important.
-            </Text>
-          </View>
-
-          {/* Buttons */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="hand-left-outline"
-                size={16}
-                color={colors.brandPrimary}
-              />
-              <Text style={themedStyles.sectionTitle}>
-                Buttons · Click Response
-              </Text>
-            </View>
-
-            <View style={styles.fieldLabel}>
-              <Text style={{ color: colors.muted }} className="text-xs">
-                {pressedVariant
-                  ? `Last pressed: ${pressedVariant}`
-                  : "Tap any button"}
-              </Text>
-            </View>
-            <View style={styles.buttonStack}>
-              {[
-                { label: "Primary", variant: "primary" as const },
-                { label: "Secondary", variant: "secondary" as const },
-                { label: "Outline", variant: "outline" as const },
-                { label: "Ghost", variant: "ghost" as const },
-              ].map((btn) => (
-                <Button
-                  key={btn.label}
-                  variant={btn.variant}
-                  className="w-full"
-                  onPress={() => handlePress(btn.label)}
-                >
-                  <Button.Label>{btn.label}</Button.Label>
-                </Button>
-              ))}
-            </View>
-
-            {/*
-              The button's press effect is a separate animated overlay
-              layer (feedbackVariant="scale-highlight" by default), not
-              a CSS state — a Tailwind `active:` class was never going
-              to reach it. The real fix is variant-first:
-                - "danger" is a real built-in Button variant, so it
-                  needs nothing extra — resting AND pressed colors
-                  come from your --color-danger-* tokens automatically.
-                - "primary" IS Brand (they're the same accent color),
-                  so there was never anything to override here either.
-                - "success" has no built-in Button variant, so it's the
-                  one case that genuinely needs a manual override — and
-                  the `animation.highlight.backgroundColor` prop is the
-                  supported way to do that, not a className.
-            */}
-            <View style={styles.buttonStack}>
-              <Button
-                variant="primary"
-                className="w-full"
-                onPress={() => handlePress("Brand")}
-              >
-                <Button.Label>Brand</Button.Label>
-              </Button>
-              <Button
-                variant="danger"
-                className="w-full"
-                onPress={() => handlePress("Danger")}
-              >
-                <Button.Label>Danger</Button.Label>
-              </Button>
-              <Button
-                className="w-full bg-success"
-                animation={{
-                  highlight: {
-                    backgroundColor: { value: colors.successPressed },
-                  },
-                }}
-                onPress={() => handlePress("Success")}
-              >
-                <Button.Label className="text-success-foreground">
-                  Success
-                </Button.Label>
-              </Button>
-            </View>
-
-            <View style={styles.buttonStack}>
-              {(["sm", "md", "lg"] as const).map((size) => (
-                <Button
-                  key={size}
-                  variant="secondary"
-                  size={size}
-                  className="w-full"
-                  onPress={() => handlePress(size)}
-                >
-                  <Button.Label>{size}</Button.Label>
-                </Button>
-              ))}
-            </View>
-          </View>
-
-          {/* Inputs */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="create-outline"
-                size={16}
-                color={colors.brandPrimary}
-              />
-              <Text style={themedStyles.sectionTitle}>Inputs</Text>
-            </View>
-            <View style={styles.fieldLabel}>
-              <Text style={{ color: colors.muted }} className="text-xs">
-                Email address
-              </Text>
-            </View>
-            <Input
-              value={inputValue}
-              onChangeText={setInputValue}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              className="bg-surface border-border border px-4 py-3 rounded-lg text-foreground font-sans"
+        {/* Urgency system */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="pulse-outline"
+              size={16}
+              color={colors.brandPrimary}
             />
+            <Text style={themedStyles.sectionTitle}>Urgency System</Text>
+          </View>
+          <View style={styles.urgencyRow}>
+            {URGENCY.map((u) => (
+              <Chip key={u.level} variant="soft" color={u.color}>
+                <View className={`w-2 h-2 rounded-full ${u.dotClass}`} />
+                <Chip.Label>{u.level}</Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        </View>
+
+        {/* Typography */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="text-outline"
+              size={16}
+              color={colors.brandPrimary}
+            />
+            <Text style={themedStyles.sectionTitle}>Typography · Manrope</Text>
+          </View>
+          <Text
+            className="text-foreground font-bold text-3xl"
+            style={{ fontFamily: "Manrope_800ExtraBold" }}
+          >
+            A quiet inbox.
+          </Text>
+          <Text
+            className="text-surface-foreground text-lg font-semibold"
+            style={{ fontFamily: "Manrope_700Bold" }}
+          >
+            Priority, without the noise.
+          </Text>
+          <Text
+            className="text-muted text-base"
+            style={{ fontFamily: "Manrope_400Regular", lineHeight: 24 }}
+          >
+            This is body text in Manrope Regular. Sift watches your inbox and
+            tells you only what matters — a deadline, an offer, a message from
+            someone important.
+          </Text>
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="hand-left-outline"
+              size={16}
+              color={colors.brandPrimary}
+            />
+            <Text style={themedStyles.sectionTitle}>
+              Buttons · Click Response
+            </Text>
           </View>
 
-          {/* Switches */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="toggle-outline"
-                size={16}
-                color={colors.brandPrimary}
-              />
-              <Text style={themedStyles.sectionTitle}>Switches</Text>
-            </View>
-            <Card variant="secondary" className="p-4 rounded-xl">
-              {[
-                {
-                  label: "Notifications",
-                  value: digestEnabled,
-                  onChange: setDigestEnabled,
+          <View style={styles.fieldLabel}>
+            <Text style={{ color: colors.muted }} className="text-xs">
+              {pressedVariant
+                ? `Last pressed: ${pressedVariant}`
+                : "Tap any button"}
+            </Text>
+          </View>
+          <View style={styles.buttonStack}>
+            {[
+              { label: "Primary", variant: "primary" as const },
+              { label: "Secondary", variant: "secondary" as const },
+              { label: "Outline", variant: "outline" as const },
+              { label: "Ghost", variant: "ghost" as const },
+            ].map((btn) => (
+              <Button
+                key={btn.label}
+                variant={btn.variant}
+                className="w-full"
+                onPress={() => handlePress(btn.label)}
+              >
+                <Button.Label>{btn.label}</Button.Label>
+              </Button>
+            ))}
+          </View>
+
+          <View style={styles.buttonStack}>
+            <Button
+              variant="primary"
+              className="w-full"
+              onPress={() => handlePress("Brand")}
+            >
+              <Button.Label>Brand</Button.Label>
+            </Button>
+            <Button
+              variant="danger"
+              className="w-full"
+              onPress={() => handlePress("Danger")}
+            >
+              <Button.Label>Danger</Button.Label>
+            </Button>
+            <Button
+              className="w-full bg-success"
+              animation={{
+                highlight: {
+                  backgroundColor: { value: colors.successPressed },
                 },
-                {
-                  label: "VIP senders first",
-                  value: vipEnabled,
-                  onChange: setVipEnabled,
-                },
-                {
-                  label: "Quiet hours",
-                  value: quietHours,
-                  onChange: setQuietHours,
-                },
-              ].map((row) => (
-                <View key={row.label} style={{ marginBottom: 12 }}>
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-foreground text-sm font-medium">
-                      {row.label}
-                    </Text>
-                    <Switch
-                      isSelected={row.value}
-                      onSelectedChange={row.onChange}
-                    >
-                      <Switch.Thumb></Switch.Thumb>
-                    </Switch>
-                  </View>
+              }}
+              onPress={() => handlePress("Success")}
+            >
+              <Button.Label className="text-success-foreground">
+                Success
+              </Button.Label>
+            </Button>
+          </View>
+
+          <View style={styles.buttonStack}>
+            {(["sm", "md", "lg"] as const).map((size) => (
+              <Button
+                key={size}
+                variant="secondary"
+                size={size}
+                className="w-full"
+                onPress={() => handlePress(size)}
+              >
+                <Button.Label>{size}</Button.Label>
+              </Button>
+            ))}
+          </View>
+        </View>
+
+        {/* Inputs */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="create-outline"
+              size={16}
+              color={colors.brandPrimary}
+            />
+            <Text style={themedStyles.sectionTitle}>Inputs</Text>
+          </View>
+          <View style={styles.fieldLabel}>
+            <Text style={{ color: colors.muted }} className="text-xs">
+              Email address
+            </Text>
+          </View>
+          <Input
+            value={inputValue}
+            onChangeText={setInputValue}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            className="bg-surface border-border border px-4 py-3 rounded-lg text-foreground font-sans"
+          />
+        </View>
+
+        {/* Switches */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="toggle-outline"
+              size={16}
+              color={colors.brandPrimary}
+            />
+            <Text style={themedStyles.sectionTitle}>Switches</Text>
+          </View>
+          <Card variant="secondary" className="p-4 rounded-xl">
+            {[
+              {
+                label: "Notifications",
+                value: digestEnabled,
+                onChange: setDigestEnabled,
+              },
+              {
+                label: "VIP senders first",
+                value: vipEnabled,
+                onChange: setVipEnabled,
+              },
+              {
+                label: "Quiet hours",
+                value: quietHours,
+                onChange: setQuietHours,
+              },
+            ].map((row) => (
+              <View key={row.label} style={{ marginBottom: 12 }}>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-foreground text-sm font-medium">
+                    {row.label}
+                  </Text>
+                  <Switch
+                    isSelected={row.value}
+                    onSelectedChange={row.onChange}
+                  >
+                    <Switch.Thumb></Switch.Thumb>
+                  </Switch>
                 </View>
-              ))}
-            </Card>
-          </View>
+              </View>
+            ))}
+          </Card>
+        </View>
 
-          {/* Bottom Sheet */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons
-                name="albums-outline"
-                size={16}
-                color={colors.brandPrimary}
-              />
-              <Text style={themedStyles.sectionTitle}>Bottom Sheet</Text>
-            </View>
-            <BottomSheet>
-              <BottomSheet.Trigger asChild>
-                <Button variant="outline">
-                  <Button.Label>Open Sheet</Button.Label>
-                </Button>
-              </BottomSheet.Trigger>
-              <BottomSheet.Portal>
-                <BottomSheet.Overlay />
-                <BottomSheet.Content detached={false} className="rounded-t-3xl">
-                  <BottomSheet.Close />
-                  <BottomSheet.Title>Snooze or archive</BottomSheet.Title>
-                  <BottomSheet.Description>
-                    Choose what happens next to this message.
-                  </BottomSheet.Description>
-                  <View style={styles.buttonStack} className="mt-4">
-                    <Button variant="secondary" className="w-full">
-                      <Button.Label>Snooze</Button.Label>
-                    </Button>
-                    <Button variant="secondary" className="w-full">
-                      <Button.Label>Archive</Button.Label>
-                    </Button>
-                  </View>
-                </BottomSheet.Content>
-              </BottomSheet.Portal>
-            </BottomSheet>
+        {/* Bottom Sheet */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons
+              name="albums-outline"
+              size={16}
+              color={colors.brandPrimary}
+            />
+            <Text style={themedStyles.sectionTitle}>Bottom Sheet</Text>
           </View>
-        </ScrollView>
-      </View>
-    </Container>
+          <BottomSheet>
+            <BottomSheet.Trigger asChild>
+              <Button variant="outline">
+                <Button.Label>Open Sheet</Button.Label>
+              </Button>
+            </BottomSheet.Trigger>
+            <BottomSheet.Portal>
+              <BottomSheet.Overlay />
+              <BottomSheet.Content detached={false} className="rounded-t-3xl">
+                <BottomSheet.Close />
+                <BottomSheet.Title>Snooze or archive</BottomSheet.Title>
+                <BottomSheet.Description>
+                  Choose what happens next to this message.
+                </BottomSheet.Description>
+                <View style={styles.buttonStack} className="mt-4">
+                  <Button variant="secondary" className="w-full">
+                    <Button.Label>Snooze</Button.Label>
+                  </Button>
+                  <Button variant="secondary" className="w-full">
+                    <Button.Label>Archive</Button.Label>
+                  </Button>
+                </View>
+              </BottomSheet.Content>
+            </BottomSheet.Portal>
+          </BottomSheet>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
