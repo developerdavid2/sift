@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.sift"
+      "package": "com.anonymous.sift",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro",
@@ -45,11 +46,30 @@
         {
           "enforceContrast": false
         }
-      ]
+      ],
+      [
+        "@clerk/expo",
+        {
+          "theme": "./clerk-theme.json"
+        }
+      ],
+      "expo-secure-store",
+      "@clerk/expo-google-signin",
+      "expo-apple-authentication",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "expo-navigation-bar": {
+        "enforceContrast": false
+      },
+      "eas": {
+        "projectId": "8aeb90ac-f071-4f04-a58d-92016cb71f9a"
+      }
     }
   }
 }

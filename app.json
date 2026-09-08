@@ -1,5 +1,9 @@
 {
-  "android": {
-    "package": "com.developerdavid2.sift"
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "8aeb90ac-f071-4f04-a58d-92016cb71f9a"
+      }
+    }
   }
 }
