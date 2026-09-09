@@ -8,6 +8,7 @@ import { useAppTheme } from "@/contexts/app-theme-context";
 import { useThemeColors } from "@/lib/theme";
 import { Modal } from "react-native";
 import { AuthView, UserButton, UserProfileView } from "@clerk/expo/native";
+import { Link } from "expo-router";
 
 // ---------------------------------------------------------------
 // Static structural styles. Defined once at module scope so they are
@@ -374,6 +375,12 @@ export default function DesignSystemScreen() {
           />
         </View>
 
+        <Link href="/congrats">
+          <Text style={{ color: colors.accent, fontWeight: "600" }}>
+            Congrats
+          </Text>
+        </Link>
+
         {/* Switches */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -427,7 +434,6 @@ export default function DesignSystemScreen() {
           onRequestClose={() => setIsAuthOpen(false)}
         >
           <UserProfileView onDismiss={() => setIsAuthOpen(false)} />
-          {/* <AuthView onDismiss={() => setIsAuthOpen(false)} /> */}
         </Modal>
 
         {/* Bottom Sheet */}

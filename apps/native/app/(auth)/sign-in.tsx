@@ -1,33 +1,29 @@
+import { useSignIn, useSignUp } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
-import { useSession, useSignIn } from "@clerk/expo";
+import { Link, useRouter, type Href } from "expo-router";
 import {
   Button,
-  Input,
-  TextField,
-  Label,
   FieldError,
+  Input,
+  Label,
+  Spinner,
+  TextField,
   useToast,
 } from "heroui-native";
-import { Link, type Href, useRouter } from "expo-router";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
-import { useThemeColors } from "@/lib/theme";
-import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 import { AppleSignInButton } from "@/features/auth/components/apple-sign-in-button";
-import { OtpVerification } from "@/features/auth/components/otp-verification";
-
-type Mode = "form" | "otp";
+import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
+import { useThemeColors } from "@/lib/theme";
 
 export default function SignInScreen() {
   const router = useRouter();
   const colors = useThemeColors();
   const { signIn, fetchStatus } = useSignIn();
-  const { session } = useSession();
+  const { signUp } = useSignUp();
   const { toast } = useToast();
-
-  const [mode, setMode] = useState<Mode>("form");
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,16 +41,7 @@ export default function SignInScreen() {
     [colors],
   );
 
-  /* -------------------------- effects -------------------------- */
-
-  useEffect(() => {
-    if (session?.status === "active") {
-      router.replace("/(dev)" as Href);
-    }
-  }, [session?.status, router]);
-
-  /* --------------------- semantic validation --------------------- */
-  // Same shape as sign-up: pure functions, called from handleSubmit.
+  const isSubmitting = fetchStatus === "fetching";
 
   const validateEmail = useCallback((email: string) => {
     if (!email) return "Email is required";
@@ -77,13 +64,10 @@ export default function SignInScreen() {
     });
   }, []);
 
-  // Same gate shape as sign-up's canSubmit: valid fields + not mid-request.
   const canSubmit =
     !validateEmail(emailAddress) &&
     !validatePassword(password) &&
-    fetchStatus !== "fetching";
-
-  /* -------------------------- handlers -------------------------- */
+    !isSubmitting;
 
   const finalizeAndGo = async () => {
     await signIn.finalize({
@@ -98,8 +82,6 @@ export default function SignInScreen() {
   };
 
   const handleSubmit = async () => {
-    // Mirrors sign-up's handleSubmit exactly: build the whole errors object,
-    // set it once, bail if anything is truthy.
     const errors = {
       email: validateEmail(emailAddress) ?? undefined,
       password: validatePassword(password) ?? undefined,
@@ -110,7 +92,24 @@ export default function SignInScreen() {
     const { error } = await signIn.password({ emailAddress, password });
 
     if (error) {
-      // Security: never reveal whether email exists, password wrong, or unverified
+      if (
+        signUp?.status === "missing_requirements" &&
+        signUp.unverifiedFields?.includes("email_address") &&
+        signUp.emailAddress?.toLowerCase() === emailAddress.toLowerCase()
+      ) {
+        toast.show({
+          variant: "warning",
+          label: "Email not verified",
+          description: "Redirecting you to complete verification...",
+        });
+        await signUp.verifications.sendEmailCode().catch(() => {});
+        router.push({
+          pathname: "/(auth)/verify-otp",
+          params: { flow: "sign-up", email: emailAddress },
+        } as Href);
+        return;
+      }
+
       toast.show({
         variant: "danger",
         label: "Sign-in failed",
@@ -120,31 +119,15 @@ export default function SignInScreen() {
     }
 
     if (signIn.status === "complete") {
-      // Clerk deliberately doesn't expose email-verification status on
-      // signIn.userData (it's typed as PublicUserData — firstName, lastName,
-      // imageUrl, identifier, userId, username; no emailAddresses or
-      // verification info). That's intentional: leaking verification state
-      // to an unauthenticated client would let someone probe account status.
-      // If you need to gate sign-in on a verified email, that has to be
-      // enforced on Clerk's side (dashboard setting / server-side check),
-      // not read out of the client SignIn object.
       await finalizeAndGo();
     } else if (signIn.status === "needs_client_trust") {
-      const emailCodeFactor = signIn.supportedSecondFactors?.find(
-        (factor) => factor.strategy === "email_code",
-      );
-      if (emailCodeFactor) {
-        try {
-          await signIn.mfa.sendEmailCode();
-          setMode("otp");
-        } catch {
-          toast.show({
-            variant: "danger",
-            label: "Couldn't send code",
-            description: "Failed to send verification code. Please try again.",
-          });
-        }
-      }
+      try {
+        await signIn.mfa.sendEmailCode();
+      } catch {}
+      router.push({
+        pathname: "/(auth)/verify-otp",
+        params: { flow: "sign-in-trust", email: emailAddress },
+      } as Href);
     } else if (signIn.status === "needs_second_factor") {
       toast.show({
         variant: "warning",
@@ -159,43 +142,6 @@ export default function SignInScreen() {
       });
     }
   };
-
-  const handleVerify = async (code: string) => {
-    try {
-      await signIn.mfa.verifyEmailCode({ code });
-      if (signIn.status === "complete") {
-        await finalizeAndGo();
-        return {};
-      }
-      return { error: "Invalid or expired code. Please try again." };
-    } catch {
-      return { error: "Something went wrong. Please try again." };
-    }
-  };
-
-  const handleResend = async () => {
-    try {
-      await signIn.mfa.sendEmailCode();
-      return {};
-    } catch {
-      return { error: "Failed to resend code. Please try again." };
-    }
-  };
-
-  if (mode === "otp") {
-    return (
-      <OtpVerification
-        title="Verify your account"
-        subtitle="Enter the code we sent to confirm it's you"
-        onVerify={handleVerify}
-        onResend={handleResend}
-        onBack={() => {
-          setMode("form");
-          signIn.reset();
-        }}
-      />
-    );
-  }
 
   return (
     <View style={[styles.screen, themed.screen]}>
@@ -227,7 +173,11 @@ export default function SignInScreen() {
         </View>
 
         <View style={styles.form}>
-          <TextField isInvalid={!!fieldErrors.email} isRequired>
+          <TextField
+            isInvalid={!!fieldErrors.email}
+            isRequired
+            isDisabled={isSubmitting}
+          >
             <Label>
               <Label.Text
                 className="text-sm font-semibold text-muted"
@@ -241,6 +191,7 @@ export default function SignInScreen() {
             </Label>
             <Input
               value={emailAddress}
+              multiline={false}
               onChangeText={(text) => {
                 setEmailAddress(text);
                 clearError("email");
@@ -261,11 +212,16 @@ export default function SignInScreen() {
               autoCapitalize="none"
               autoComplete="email"
               textContentType="emailAddress"
+              className="overflow-hidden"
             />
             <FieldError>{fieldErrors.email}</FieldError>
           </TextField>
 
-          <TextField isInvalid={!!fieldErrors.password} isRequired>
+          <TextField
+            isInvalid={!!fieldErrors.password}
+            isRequired
+            isDisabled={isSubmitting}
+          >
             <Label>
               <Label.Text
                 className="text-sm font-semibold text-muted"
@@ -280,12 +236,24 @@ export default function SignInScreen() {
             <View className="w-full flex-row items-center">
               <Input
                 value={password}
+                multiline={false}
                 onChangeText={(text) => {
                   setPassword(text);
                   clearError("password");
                 }}
+                onBlur={() => {
+                  if (!password) {
+                    clearError("password");
+                    return;
+                  }
+                  const err = validatePassword(password);
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    ...(err && { password: err }),
+                  }));
+                }}
                 placeholder="••••••••"
-                className="flex-1 pr-10"
+                className="flex-1 pr-10 overflow-hidden"
                 secureTextEntry={!showPassword}
                 textContentType="password"
                 autoComplete="current-password"
@@ -293,6 +261,7 @@ export default function SignInScreen() {
               <Pressable
                 className="absolute right-4"
                 onPress={() => setShowPassword((v) => !v)}
+                disabled={isSubmitting}
               >
                 <Ionicons
                   name={showPassword ? "eye-off-outline" : "eye-outline"}
@@ -310,7 +279,14 @@ export default function SignInScreen() {
             onPress={handleSubmit}
             isDisabled={!canSubmit}
           >
-            <Button.Label>Log In</Button.Label>
+            {isSubmitting ? (
+              <View className="flex-row items-center gap-2">
+                <Spinner size="md" color="#FFFFFF" />
+                <Button.Label>Signing in...</Button.Label>
+              </View>
+            ) : (
+              <Button.Label>Log In</Button.Label>
+            )}
           </Button>
 
           <View style={styles.divider}>
@@ -326,20 +302,21 @@ export default function SignInScreen() {
           </View>
 
           <View className="flex-row gap-2">
-            <GoogleSignInButton />
-            <AppleSignInButton />
+            <GoogleSignInButton disabled={isSubmitting} />
+            <AppleSignInButton disabled={isSubmitting} />
           </View>
 
           <View style={styles.footer}>
             <Text style={themed.subtitle}>Don't have an account? </Text>
             <Link href="/(auth)/sign-up">
-              <Text style={{ color: colors.accent, fontWeight: "600" }}>
+              <Text
+                style={{
+                  color: colors.brandPrimarySoftForeground,
+                  fontWeight: "600",
+                  fontSize: 17,
+                }}
+              >
                 Sign up
-              </Text>
-            </Link>
-            <Link href="/(auth)/verify-otp">
-              <Text style={{ color: colors.accent, fontWeight: "600" }}>
-                OTP Demo
               </Text>
             </Link>
           </View>
@@ -401,6 +378,7 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     justifyContent: "center",
+    alignItems: "baseline",
     marginTop: 24,
   },
 });

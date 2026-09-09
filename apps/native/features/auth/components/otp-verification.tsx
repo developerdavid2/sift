@@ -7,8 +7,9 @@ import {
   Label,
   FieldError,
   useToast,
+  LinkButton,
 } from "heroui-native";
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,8 +17,15 @@ import {
   Text,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 import { useThemeColors } from "@/lib/theme";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 type OtpVerificationProps = {
   title: string;
@@ -26,6 +34,8 @@ type OtpVerificationProps = {
   onResend: () => Promise<{ error?: string } | void>;
   onBack?: () => void;
 };
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export function OtpVerification({
   title,
@@ -41,8 +51,39 @@ export function OtpVerification({
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
 
   const isBusy = isVerifying || isResending;
+
+  const shakeX = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeX.value }],
+  }));
+  const triggerShake = useCallback(() => {
+    shakeX.value = withSequence(
+      withTiming(-8, { duration: 40 }),
+      withTiming(8, { duration: 40 }),
+      withTiming(-6, { duration: 40 }),
+      withTiming(6, { duration: 40 }),
+      withTiming(0, { duration: 40 }),
+    );
+  }, [shakeX]);
+
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   const validate = useCallback((value: string) => {
     if (!value) return "Code is required";
@@ -56,6 +97,7 @@ export function OtpVerification({
     const error = validate(code);
     if (error) {
       setFieldError(error);
+      triggerShake();
       return;
     }
     setFieldError(null);
@@ -65,7 +107,9 @@ export function OtpVerification({
     setIsVerifying(false);
 
     if (result?.error) {
-      // Auth failure — never reveal if it was expired, used, or wrong
+      setFieldError(result.error);
+      triggerShake();
+      setCode("");
       toast.show({
         variant: "danger",
         label: "Verification failed",
@@ -75,6 +119,8 @@ export function OtpVerification({
   };
 
   const handleResend = async () => {
+    if (resendCooldown > 0 || isBusy) return;
+
     setIsResending(true);
     const result = await onResend();
     setIsResending(false);
@@ -91,13 +137,18 @@ export function OtpVerification({
         label: "Code sent",
         description: "Check your email for the new verification code.",
       });
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.screen, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardAwareScrollView
+      mode="layout"
+      bottomOffset={32}
+      style={{ flex: 1 }}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.foreground }]}>
@@ -110,32 +161,31 @@ export function OtpVerification({
 
       <View style={styles.form}>
         <TextField isInvalid={!!fieldError}>
-          <Label className="text-sm font-semibold text-foreground">
-            Verification Code
-          </Label>
-
-          <InputOTP
-            maxLength={6}
-            value={code}
-            onChange={(v) => {
-              setCode(v);
-              clearError();
-            }}
-            pattern={REGEXP_ONLY_DIGITS}
-            isInvalid={!!fieldError}
-          >
-            <InputOTP.Group>
-              <InputOTP.Slot index={0} />
-              <InputOTP.Slot index={1} />
-              <InputOTP.Slot index={2} />
-            </InputOTP.Group>
-            <InputOTP.Separator />
-            <InputOTP.Group>
-              <InputOTP.Slot index={3} />
-              <InputOTP.Slot index={4} />
-              <InputOTP.Slot index={5} />
-            </InputOTP.Group>
-          </InputOTP>
+          <Animated.View style={shakeStyle}>
+            <InputOTP
+              maxLength={6}
+              value={code}
+              onChange={(v) => {
+                setCode(v);
+                clearError();
+              }}
+              pattern={REGEXP_ONLY_DIGITS}
+              isInvalid={!!fieldError}
+              isDisabled={isBusy}
+            >
+              <InputOTP.Group>
+                <InputOTP.Slot index={0} />
+                <InputOTP.Slot index={1} />
+                <InputOTP.Slot index={2} />
+              </InputOTP.Group>
+              <InputOTP.Separator />
+              <InputOTP.Group>
+                <InputOTP.Slot index={3} />
+                <InputOTP.Slot index={4} />
+                <InputOTP.Slot index={5} />
+              </InputOTP.Group>
+            </InputOTP>
+          </Animated.View>
 
           <FieldError>{fieldError}</FieldError>
         </TextField>
@@ -156,24 +206,30 @@ export function OtpVerification({
           )}
         </Button>
 
-        <View className="flex-row items-center justify-center text-center mt-4">
+        <View className="flex-row items-center justify-center gap-1 mt-4">
           <Text className="text-sm text-muted">
             Didn&apos;t receive a code?
           </Text>
-          <Button variant="ghost" onPress={handleResend} isDisabled={isBusy}>
-            {isResending ? (
-              <Spinner size="sm" />
-            ) : (
-              <Button.Label
-                style={{
-                  color: colors.brandPrimarySoftForeground,
-                  fontWeight: "600",
-                }}
-              >
-                Resend
-              </Button.Label>
-            )}
-          </Button>
+          {resendCooldown > 0 ? (
+            <Text className="text-sm text-muted font-semibold">
+              Resend in {resendCooldown}s
+            </Text>
+          ) : (
+            <LinkButton onPress={handleResend} isDisabled={isBusy}>
+              {isResending ? (
+                <Spinner size="sm" />
+              ) : (
+                <LinkButton.Label
+                  style={{
+                    color: colors.brandPrimarySoftForeground,
+                    fontWeight: "600",
+                  }}
+                >
+                  Resend
+                </LinkButton.Label>
+              )}
+            </LinkButton>
+          )}
         </View>
 
         {onBack && (
@@ -189,12 +245,18 @@ export function OtpVerification({
           </Button>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
   header: { gap: 6, marginBottom: 20 },
   title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
   subtitle: { fontSize: 15 },

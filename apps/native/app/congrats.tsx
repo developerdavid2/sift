@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, type Href } from "expo-router";
+import { Link, useRouter, type Href } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect } from "react";
 import { BackHandler, Text, View } from "react-native";
@@ -11,9 +11,6 @@ export default function CongratsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
 
-  // Belt-and-braces: gestureEnabled: false (set in _layout.tsx) blocks the
-  // iOS swipe-back gesture; this blocks Android's hardware back button too,
-  // since this is meant to be a one-way terminal screen.
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => sub.remove();
@@ -64,7 +61,7 @@ export default function CongratsScreen() {
       <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
         <Button
           variant="primary"
-          className="w-full"
+          className="w-full rounded-2xl"
           onPress={() => router.replace("/(dev)" as Href)}
         >
           <Button.Label>Go to Home</Button.Label>

@@ -6,7 +6,7 @@ import { AuthProgressHeader } from "@/features/auth/components/auth-progress-hea
 import { OtpVerification } from "@/features/auth/components/otp-verification";
 import { useThemeColors } from "@/lib/theme";
 
-type Flow = "sign-up" | "sign-in-unverified" | "sign-in-trust";
+type Flow = "sign-up" | "sign-in-trust";
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
@@ -19,8 +19,7 @@ export default function VerifyOtpScreen() {
   const { signUp } = useSignUp();
   const { signIn } = useSignIn();
 
-  const goToCongrats = () => router.push("/(auth)/congrats" as Href);
-
+  const goToCongrats = () => router.replace("/congrats" as Href);
   const handleVerify = async (code: string) => {
     if (flow === "sign-up") {
       await signUp.verifications.verifyEmailCode({ code });
@@ -60,24 +59,6 @@ export default function VerifyOtpScreen() {
       }
     }
 
-    if (flow === "sign-in-unverified") {
-      // TODO: confirm the exact Clerk call for verifying an email during
-      // sign-in in your SDK version — this differs from the mfa.* methods
-      // above, which are for device-trust verification, not identity
-      // verification. Once verified, route to congrats since this is the
-      // user's first time completing account setup, however late.
-      try {
-        // await signIn.verifications.verifyEmailCode({ code });
-        if (signIn.status === "complete") {
-          goToCongrats();
-          return {};
-        }
-        return { error: "Invalid or expired code. Please try again." };
-      } catch {
-        return { error: "Something went wrong. Please try again." };
-      }
-    }
-
     return { error: "Something went wrong. Please try again." };
   };
 
@@ -94,8 +75,7 @@ export default function VerifyOtpScreen() {
         return { error: "Failed to resend code. Please try again." };
       }
     }
-    // TODO: sign-in-unverified resend call, same caveat as above.
-    return {};
+    return { error: "Something went wrong. Please try again." };
   };
 
   return (
@@ -110,6 +90,7 @@ export default function VerifyOtpScreen() {
         }
         onVerify={handleVerify}
         onResend={handleResend}
+        onBack={() => router.replace("/(auth)/sign-in" as Href)}
       />
     </View>
   );

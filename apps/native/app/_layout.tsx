@@ -55,6 +55,7 @@ function SystemBars() {
 function AppStack() {
   const { isSignedIn, isLoaded } = useAuth({ treatPendingAsSignedOut: false });
   const { onboardingComplete } = useAppReady();
+  const colors = useThemeColors();
 
   useEffect(() => {
     if (isLoaded) {
@@ -73,7 +74,14 @@ function AppStack() {
   console.log("[Layout]", { isSignedIn, onboardingComplete });
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: "ios_from_right",
+        animationTypeForReplace: "push",
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
       {/* Entry redirector */}
       <Stack.Screen name="index" />
 
@@ -88,8 +96,10 @@ function AppStack() {
       </Stack.Protected>
 
       {/* App: only if signed in */}
+      {/* App: only if signed in */}
       <Stack.Protected guard={isSignedIn!}>
         <Stack.Screen name="(dev)" />
+        <Stack.Screen name="congrats" />
       </Stack.Protected>
     </Stack>
   );

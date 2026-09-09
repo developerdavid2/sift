@@ -50,8 +50,12 @@ export default function SignUpScreen() {
     [colors],
   );
 
-  const validateName = (value: string, label: string) =>
-    value.trim() ? null : `${label} is required`;
+  const validateName = (value: string, label: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return `${label} is required`;
+    if (trimmed.length < 2) return `${label} must be at least 2 characters`;
+    return null;
+  };
 
   const validateEmail = useCallback((email: string) => {
     if (!email) return "Email is required";
@@ -62,11 +66,7 @@ export default function SignUpScreen() {
 
   const validatePassword = useCallback((password: string) => {
     if (!password) return "Password is required";
-    // Must match your Clerk Dashboard's password policy exactly, or the
-    // client will approve passwords the server then rejects. Current
-    // instance setting is 15 — if you change it in the Dashboard, change
-    // it here too.
-    if (password.length < 15) return "Password must be at least 15 characters";
+    if (password.length < 8) return "Password must be at least 8 characters";
     if (!/[A-Z]/.test(password))
       return "Password must contain at least one uppercase letter";
     if (!/[0-9]/.test(password))
@@ -121,11 +121,46 @@ export default function SignUpScreen() {
 
     if (error) {
       console.error("signUp.password error:", JSON.stringify(error, null, 2));
-      toast.show({
-        variant: "danger",
-        label: "Unable to create account",
-        description: "Please check your details and try again.",
-      });
+
+      const clerkErrors =
+        (
+          error as {
+            errors?: {
+              code?: string;
+              message?: string;
+              meta?: { paramName?: string };
+            }[];
+          }
+        )?.errors ?? [];
+      const paramToField: Record<string, keyof typeof fieldErrors> = {
+        email_address: "email",
+        password: "password",
+        first_name: "firstName",
+        last_name: "lastName",
+      };
+
+      const newFieldErrors: typeof fieldErrors = {};
+      for (const e of clerkErrors) {
+        const field = e.meta?.paramName && paramToField[e.meta.paramName];
+        if (field && e.message) {
+          newFieldErrors[field] = e.message;
+        }
+      }
+
+      if (Object.keys(newFieldErrors).length > 0) {
+        setFieldErrors((prev) => ({ ...prev, ...newFieldErrors }));
+        toast.show({
+          variant: "danger",
+          label: "Unable to create account",
+          description: "Please fix the highlighted field and try again.",
+        });
+      } else {
+        toast.show({
+          variant: "danger",
+          label: "Unable to create account",
+          description: "Please check your details and try again.",
+        });
+      }
       return;
     }
 
@@ -178,6 +213,7 @@ export default function SignUpScreen() {
             <TextField
               isInvalid={!!fieldErrors.firstName}
               isRequired
+              isDisabled={fetchStatus === "fetching"}
               style={{ flex: 1 }}
             >
               <Label>
@@ -193,14 +229,27 @@ export default function SignUpScreen() {
               </Label>
               <Input
                 value={firstName}
+                multiline={false}
                 onChangeText={(text) => {
                   setFirstName(text);
                   clearError("firstName");
+                }}
+                onBlur={() => {
+                  if (!firstName.trim()) {
+                    clearError("firstName");
+                    return;
+                  }
+                  const err = validateName(firstName, "First name");
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    ...(err && { firstName: err }),
+                  }));
                 }}
                 placeholder="Ada"
                 autoCapitalize="words"
                 autoComplete="given-name"
                 textContentType="givenName"
+                className="overflow-hidden"
               />
               <FieldError>{fieldErrors.firstName}</FieldError>
             </TextField>
@@ -208,6 +257,7 @@ export default function SignUpScreen() {
             <TextField
               isInvalid={!!fieldErrors.lastName}
               isRequired
+              isDisabled={fetchStatus === "fetching"}
               style={{ flex: 1 }}
             >
               <Label>
@@ -223,20 +273,37 @@ export default function SignUpScreen() {
               </Label>
               <Input
                 value={lastName}
+                multiline={false}
                 onChangeText={(text) => {
                   setLastName(text);
                   clearError("lastName");
+                }}
+                onBlur={() => {
+                  if (!lastName.trim()) {
+                    clearError("lastName");
+                    return;
+                  }
+                  const err = validateName(lastName, "Last name");
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    ...(err && { lastName: err }),
+                  }));
                 }}
                 placeholder="Lovelace"
                 autoCapitalize="words"
                 autoComplete="family-name"
                 textContentType="familyName"
+                className="overflow-hidden"
               />
               <FieldError>{fieldErrors.lastName}</FieldError>
             </TextField>
           </View>
 
-          <TextField isInvalid={!!fieldErrors.email} isRequired>
+          <TextField
+            isInvalid={!!fieldErrors.email}
+            isRequired
+            isDisabled={fetchStatus === "fetching"}
+          >
             <Label>
               <Label.Text
                 className="text-sm text-foreground"
@@ -250,6 +317,7 @@ export default function SignUpScreen() {
             </Label>
             <Input
               value={emailAddress}
+              multiline={false}
               onChangeText={(text) => {
                 setEmailAddress(text);
                 clearError("email");
@@ -270,11 +338,16 @@ export default function SignUpScreen() {
               autoCapitalize="none"
               autoComplete="email"
               textContentType="emailAddress"
+              className="overflow-hidden"
             />
             <FieldError>{fieldErrors.email}</FieldError>
           </TextField>
 
-          <TextField isInvalid={!!fieldErrors.password} isRequired>
+          <TextField
+            isInvalid={!!fieldErrors.password}
+            isRequired
+            isDisabled={fetchStatus === "fetching"}
+          >
             <Label>
               <Label.Text
                 className="text-sm text-foreground"
@@ -289,12 +362,24 @@ export default function SignUpScreen() {
             <View className="w-full flex-row items-center">
               <Input
                 value={password}
+                multiline={false}
                 onChangeText={(text) => {
                   setPassword(text);
                   clearError("password");
                 }}
+                onBlur={() => {
+                  if (!password) {
+                    clearError("password");
+                    return;
+                  }
+                  const err = validatePassword(password);
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    ...(err && { password: err }),
+                  }));
+                }}
                 placeholder="••••••••"
-                className="flex-1 pr-10"
+                className="flex-1 pr-10 overflow-hidden"
                 secureTextEntry={!showPassword}
                 autoComplete="password"
                 textContentType="password"
@@ -302,6 +387,7 @@ export default function SignUpScreen() {
               <Pressable
                 className="absolute right-4"
                 onPress={() => setShowPassword((v) => !v)}
+                disabled={fetchStatus === "fetching"}
               >
                 <Ionicons
                   name={showPassword ? "eye-off-outline" : "eye-outline"}
@@ -311,9 +397,18 @@ export default function SignUpScreen() {
               </Pressable>
             </View>
             <FieldError>{fieldErrors.password}</FieldError>
+            {!fieldErrors.password && (
+              <Text className="text-xs text-muted mt-1">
+                At least 8 characters, with an uppercase letter and a number.
+              </Text>
+            )}
           </TextField>
 
-          <TextField isInvalid={!!fieldErrors.confirmPassword} isRequired>
+          <TextField
+            isInvalid={!!fieldErrors.confirmPassword}
+            isRequired
+            isDisabled={fetchStatus === "fetching"}
+          >
             <Label>
               <Label.Text
                 className="text-sm text-foreground"
@@ -328,12 +423,24 @@ export default function SignUpScreen() {
             <View className="w-full flex-row items-center">
               <Input
                 value={confirmPassword}
+                multiline={false}
                 onChangeText={(text) => {
                   setConfirmPassword(text);
                   clearError("confirmPassword");
                 }}
+                onBlur={() => {
+                  if (!confirmPassword) {
+                    clearError("confirmPassword");
+                    return;
+                  }
+                  const err = validateConfirmPassword(confirmPassword);
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    ...(err && { confirmPassword: err }),
+                  }));
+                }}
                 placeholder="••••••••"
-                className="flex-1 pr-10"
+                className="flex-1 pr-10 overflow-hidden"
                 secureTextEntry={!showConfirmPassword}
                 autoComplete="password"
                 textContentType="password"
@@ -341,6 +448,7 @@ export default function SignUpScreen() {
               <Pressable
                 className="absolute right-4"
                 onPress={() => setShowConfirmPassword((v) => !v)}
+                disabled={fetchStatus === "fetching"}
               >
                 <Ionicons
                   name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
@@ -356,6 +464,7 @@ export default function SignUpScreen() {
             isSelected={agreedToTerms}
             onSelectedChange={setAgreedToTerms}
             className="mt-1"
+            isDisabled={fetchStatus === "fetching"}
           >
             <ControlField.Indicator>
               <Checkbox
@@ -412,7 +521,7 @@ export default function SignUpScreen() {
             />
           </View>
 
-          <GoogleSignInButton />
+          <GoogleSignInButton disabled={fetchStatus === "fetching"} />
         </View>
       </KeyboardAwareScrollView>
     </View>
