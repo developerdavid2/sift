@@ -1,7 +1,7 @@
 node_modules/
 .git/
-apps/native/android/
-apps/native/ios/
+android/
+ios/
 .expo/
 dist/
 build/

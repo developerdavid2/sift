@@ -48,7 +48,7 @@ export default function VerifyOtpScreen() {
                 console.log(session.currentTask);
                 return;
               }
-              router.replace("/(dev)" as Href);
+              router.replace("/(tabs)" as Href);
             },
           });
           return {};

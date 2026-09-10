@@ -7,7 +7,7 @@ export default function Index() {
   const { isSignedIn } = useAuth();
   const { onboardingComplete } = useAppReady();
 
-  if (isSignedIn) return <Redirect href="/(dev)" />;
+  if (isSignedIn) return <Redirect href="/(tabs)" />;
   if (onboardingComplete) return <Redirect href="/(auth)/sign-in" />;
   return <Redirect href="/(onboarding)" />;
 }

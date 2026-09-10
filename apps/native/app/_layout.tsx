@@ -96,9 +96,8 @@ function AppStack() {
       </Stack.Protected>
 
       {/* App: only if signed in */}
-      {/* App: only if signed in */}
       <Stack.Protected guard={isSignedIn!}>
-        <Stack.Screen name="(dev)" />
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="congrats" />
       </Stack.Protected>
     </Stack>
