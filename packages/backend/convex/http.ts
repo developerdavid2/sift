@@ -21,15 +21,14 @@ http.route({
     switch (event.type) {
       case "user.created":
       case "user.updated":
-        await ctx.runMutation(internal.users.upsertFromClerk, {
+        await ctx.runMutation(internal.webhooks.upsertUserFromClerk, {
           data: event.data,
         });
         break;
 
       case "user.deleted": {
-        const clerkUserId = event.data.id!;
-        await ctx.runMutation(internal.users.deleteFromClerk, {
-          clerkUserId,
+        await ctx.runMutation(internal.webhooks.deleteUserFromClerk, {
+          clerkUserId: event.data.id!,
         });
         break;
       }
@@ -71,8 +70,6 @@ async function validateRequest(req: Request): Promise<ValidatedEvent> {
 
   const wh = new Webhook(webhookSecret);
   try {
-    // svix's `verify()` only throws on invalid signatures; it does NOT
-    // return the parsed event (svix >= 2.4.0 returns void). Parse ourselves.
     wh.verify(payloadString, svixHeaders);
     const event = JSON.parse(payloadString) as unknown as WebhookEvent;
     return { ok: true, event };

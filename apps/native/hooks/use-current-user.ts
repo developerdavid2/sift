@@ -6,7 +6,7 @@ import { useConvexAuth } from "convex/react";
 
 export function useCurrentUser() {
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const user = useQuery(api.users.get);
+  const user = useQuery(api.users.entries.get);
 
   return {
     isLoading: isLoading || (isAuthenticated && user === null),
