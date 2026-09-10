@@ -1,0 +1,7 @@
+{
+  "extends": "@sift/config/tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["convex/**/*.ts", "convex/**/*.tsx"]
+}

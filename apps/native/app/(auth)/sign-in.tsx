@@ -76,7 +76,7 @@ export default function SignInScreen() {
           console.log(s.currentTask);
           return;
         }
-        router.replace("/(dev)" as Href);
+        router.replace("/(tabs)" as Href);
       },
     });
   };

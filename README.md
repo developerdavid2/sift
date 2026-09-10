@@ -192,7 +192,7 @@ Built on top of HeroUI Native's base primitives, styled with the Sift color toke
 
 Each table below is a category of thing being stored. Fields are described by what they hold, not by data type — this way it can be implemented in any backend, not just Convex.
 
-**`people`** — one row per signed-in person.
+**`users`** — one row per signed-in person.
 
 - their Clerk identity reference
 - display name, avatar
@@ -369,16 +369,7 @@ Since this is a digital subscription bought from inside a native app, it must go
 
 **Frontend, grouped by feature, not by file type** — rather than one giant folder of components used everywhere, each feature area (inbox, digest, chat, settings, billing) owns its own small set of components and logic, and only pulls from a small shared set of truly universal pieces (buttons, badges, sheets, empty states). This means deleting the entire chat feature, for instance, should be close to deleting one folder, not hunting through the whole app for stray references.
 
-**Build order, feature by feature, backend before interface each time:**
-
-1. Identity & first connected inbox (schema + connect flow + first sync) — nothing else matters until this works
-2. Classification (the AI scoring action) and the priority inbox feed
-3. Message actions — mark handled, snooze, feedback
-4. Daily digest generation and playback (device voice first, ElevenLabs later)
-5. Notifications and quiet hours
-6. Preferences — VIPs, categories, personalization
-7. Subscription/billing wiring and paywall gating (retrofit the locks onto the features already built)
-8. Chat/voice agent last — it depends on everything above already existing to have real tools to call
+**Build order, feature by feature, backend before interface each time:** See **Section 16: Implementation Roadmap** for the detailed phase-by-phase build plan with exact screen names, components, and backend dependencies.
 
 ---
 
@@ -391,3 +382,387 @@ For general email-list interaction patterns (swipe actions, card density, urgenc
 ## 15. What's Deliberately Left Out of Version One
 
 Worth stating clearly so nobody accidentally scope-creeps this: no Slack integration yet, no automatic learning loop from the `feedback` table (it's collected, but nothing acts on it automatically yet), no team/shared-inbox support (every connected inbox belongs to exactly one person), no in-app email composer (replying deep-links out to Gmail itself for now).
+
+---
+
+## 16. Implementation Roadmap
+
+This section defines the exact build order. Each phase must be fully complete (backend + frontend) before moving to the next. No skipping ahead.
+
+### What's Already Built
+
+| Area | Status | Details |
+|------|--------|---------|
+| **Auth flow** | ✅ Complete | Sign-up, sign-in, OTP verification, Google/Apple OAuth, unverified sign-up detection |
+| **Onboarding slides** | ✅ Complete | Welcome screen, 3-slide carousel, animation, SecureStore persistence |
+| **Design system** | ✅ Complete | 90+ color tokens, urgency system, Manrope fonts, HeroUI Native integration |
+| **Convex schema** | ✅ Complete | 9 tables: users, connectedInboxes, messages, classifications, feedback, preferences, digests, conversations, chatMessages, subscriptions |
+| **Convex functions** | ✅ Complete | Queries + mutations for all 9 tables (users, connectedInboxes, messages, classifications, preferences, digests, conversations, chatMessages, subscriptions) |
+| **Clerk webhook** | ✅ Complete + verified | `convex/http.ts` `/clerk-webhook`, `users.upsertFromClerk` / `users.deleteFromClerk` internal mutations. Verified: fresh sign-up creates a `users` row + default `preferences` |
+| **Bottom tabs + header** | ✅ Complete | 4-tab bar (Inbox/Digest/Chat/Settings), `AppHeader` with back button |
+| **App shell** | ✅ Complete | Root layout, ClerkProvider, ConvexProviderWithClerk, theme provider, route guards |
+
+---
+
+### Phase 1: App Shell — Webhook, Bottom Tabs, Reusable Header
+
+**Goal:** User is signed up, and after sign-in lands on the main tab bar. Clerk user records are stored in Convex via webhook. Stack screens have a reusable header with a back button.
+
+**Frontend routes:**
+
+| Route | Purpose |
+|-------|---------|
+| `app/(tabs)/_layout.tsx` | Bottom tab bar: Inbox, Digest, Chat, Settings |
+| `app/(tabs)/index.tsx` | Inbox home (placeholder; Connect Gmail empty state arrives in Phase 2) |
+| `app/(tabs)/digest.tsx` | Digest placeholder |
+| `app/(tabs)/chat.tsx` | Chat placeholder |
+| `app/(tabs)/settings.tsx` | Settings placeholder |
+| `components/app-header.tsx` | Reusable header: title + optional back button for stack screens |
+| `hooks/use-current-user.ts` | Gates `isLoading` until the webhook has stored the user |
+
+**Backend needed:**
+- `convex/http.ts` — Clerk webhook endpoint `/clerk-webhook` (svix signature verified) — ✅ built
+- `users.upsertFromClerk` / `users.deleteFromClerk` internal mutations — ✅ built
+- `users.get` already acts as `current` (returns user or null) — ✅ built
+
+**Dashboard configuration (DONE):**
+1. ✅ **Clerk dashboard → Webhooks** — endpoint `https://fine-snake-179.convex.site/clerk-webhook`, `user` events.
+2. ✅ **Convex dashboard → Environment variables** — `CLERK_WEBHOOK_SECRET` set.
+3. ✅ Backend deployed via `npx convex dev`.
+
+**Completion criteria:**
+- ✅ Signing up creates a row in the `users` table (verified in Convex dashboard)
+- [ ] Signed-in user lands on the bottom tab bar with 4 tabs
+- [ ] Tab switching works, active tab tinted with brand color
+- [ ] Header renders a back chevron on stack screens, calls `router.back()`
+
+---
+
+### Phase 2: Connect Inbox (Gmail OAuth) + Priority Inbox Feed
+
+**Goal:** User connects their first Gmail inbox directly from the Inbox tab when it's empty, then sees their email feed sorted by AI urgency.
+
+**Frontend routes:**
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| Inbox Home | `(tabs)/index.tsx` | `InboxHeader`, `ConnectInboxCard` (empty state), `FilterChips`, `EmailCardList`, `EmptyState`, `UsageLimitBanner` | Greeting, empty state→Connect Gmail card, filter chips (Urgent/Today/Later), scrollable message cards |
+| Message Detail | `(inbox)/[messageId].tsx` | `MessageHeader`, `SummaryCard`, `EmailBody`, `ActionBar` | Back arrow, sender, subject, AI summary, cleaned body, action buttons |
+
+**Reusable components to build:**
+
+| Component | Built from | Purpose |
+|-----------|-----------|---------|
+| `ConnectInboxCard` | HeroUI `Card` | Card with Google mark, "Choose an account" button, loading/success/error states |
+| `GoogleOAuthButton` | `expo-auth-session` + `expo-web-browser` | Opens Google consent screen |
+| `PriorityBadge` | HeroUI `Chip` | Urgency dot + label (urgent/today/later), optional pulse |
+| `EmailCard` | HeroUI `Card` + `GestureDetector` | Swipeable card: swipe right = handled, swipe left = snooze |
+| `FilterChips` | Horizontal `ScrollView` + HeroUI `Chip` | Urgent · N, Today · N, Later · N |
+| `InboxSourcePicker` | Horizontal `ScrollView` of avatars | Multi-inbox avatar picker (only if >1 inbox) |
+| `EmptyState` | Illustration + HeroUI `Text` | "All caught up" with floating animation |
+| `UsageLimitBanner` | Custom inline banner | "Daily limit reached" with CTA |
+
+**Backend needed:**
+- Gmail OAuth token exchange action — needs building
+- Gmail sync action — needs building
+- `messages.insert` action — needs building (batch insert synced messages)
+- `messages.getPriorityFeed` — already built
+- `messages.get` — already built
+- `messages.getCounts` — already built
+- `messages.markHandled` — already built
+- `messages.snooze` — already built
+- `messages.markRead` — already built
+- `feedback.upsert` mutation — needs building (for "Not Important" action)
+
+**Completion criteria:**
+- Inbox tab shows "Connect Gmail" empty state when no inbox is connected
+- User taps "Choose an account" → Google consent screen opens
+- User grants permission → tokens stored in `connectedInboxes`
+- First sync runs → messages appear in `messages` table
+- Inbox shows messages sorted by urgency
+- Filter chips filter by urgency level
+- Swipe right marks handled, swipe left opens snooze sheet
+- Tap opens message detail with AI summary
+- Empty state shows when no messages
+
+---
+
+### Phase 3: Message Actions & Feedback
+
+**Goal:** User can interact with messages (mark handled, snooze, feedback).
+
+**Frontend route:** Built into Phase 2 screens
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| Snooze Sheet | Bottom sheet on `(inbox)/index.tsx` | `ActionSheet` | Snooze 1h, 3h, tomorrow, mark handled, archive |
+| Feedback Toast | Toast on `(inbox)/[messageId].tsx` | Toast via `useToast` | "Got it, we'll learn from this" confirmation |
+
+**Reusable components to build:**
+
+| Component | Built from | Purpose |
+|-----------|-----------|---------|
+| `ActionSheet` | HeroUI `Sheet` | Snooze options, mark handled, archive |
+
+**Backend needed:**
+- `messages.markHandled` — already built
+- `messages.snooze` — already built
+- `feedback.upsert` — needs building
+- `classifications.upsert` — already built (for AI to use)
+
+**Completion criteria:**
+- Snooze sheet shows with time options
+- Mark handled removes card with animation
+- "Not Important" shows toast and records feedback
+
+---
+
+### Phase 4: Walkthrough Overlay
+
+**Goal:** First-time users see a guided tour of the inbox.
+
+**Frontend route:** State layered on `(inbox)/index.tsx`
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| Walkthrough Overlay | State on `(inbox)/index.tsx` | `WalkthroughStep`, `SpotlightCutout`, `ProgressDots` | Dark overlay with spotlight on UI elements |
+
+**Reusable components to build:**
+
+| Component | Built from | Purpose |
+|-----------|-----------|---------|
+| `WalkthroughOverlay` | `Modal` + Reanimated | Dark overlay with cut-out spotlight |
+| `WalkthroughStep` | HeroUI `Card` + `Button` | Callout bubble with copy, Next/Done button |
+
+**Backend needed:**
+- None (client-side state, persisted to SecureStore)
+
+**Completion criteria:**
+- 4-step walkthrough on first inbox visit
+- Spotlight highlights: filter chips, message card, swipe gesture, detail tap
+- Skip button at every step
+- Persists "completed" flag to SecureStore
+
+---
+
+### Phase 5: Daily Digest
+
+**Goal:** User sees a daily plain-English summary of important emails.
+
+**Frontend route:** `app/(digest)/` (tab)
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| Digest Home | `(digest)/index.tsx` | `DigestDateHeader`, `DigestLines`, `PlayButton` | Date, 3-5 urgency-colored lines, play button |
+| Digest Playback | State on `(digest)/index.tsx` | `WaveformBars`, `HighlightLine`, `PlaybackControls` | Audio playback with karaoke-style highlighting |
+
+**Reusable components to build:**
+
+| Component | Built from | Purpose |
+|-----------|-----------|---------|
+| `DigestLine` | HeroUI `Text` + urgency dot | Single digest sentence with colored dot |
+| `WaveformBars` | Reanimated views | 4 vertical bars animating in wave pattern |
+| `PlaybackControls` | HeroUI `Button` | Play/pause, skip, voice label |
+
+**Backend needed:**
+- `digests.getToday` — already built
+- `digests.upsert` — already built
+- `digests.markAudioGenerated` — already built
+- Digest generation action (calls AI) — needs building
+- Text-to-speech action (device voice) — needs building
+
+**Completion criteria:**
+- Digest shows today's summary lines
+- Play button starts audio playback
+- Current line highlights during playback
+- Voice character label tappable
+
+---
+
+### Phase 6: Settings & Preferences
+
+**Goal:** User can manage their account, inboxes, and preferences.
+
+**Frontend route:** `app/(settings)/` (tab)
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| Settings Home | `(settings)/index.tsx` | `SettingsGroup`, `SettingsRow` | Grouped list: Account, Inboxes, Notifications, Personalization, Subscription |
+| Connected Inboxes | `(settings)/inboxes.tsx` | `InboxRow`, `AddInboxButton` | List of connected inboxes with status, add/remove |
+| VIP Senders | `(settings)/vip.tsx` | `VipList`, `AddVipInput` | List of VIP emails, add/remove |
+| Category Rules | `(settings)/categories.tsx` | `CategoryToggle` | Toggle muted categories |
+| Notification Prefs | `(settings)/notifications.tsx` | `TimePicker`, `QuietHoursToggle` | Digest time, quiet hours |
+| Voice Character Picker | `(settings)/voice.tsx` | `VoicePicker` | List of voices with preview, locked state |
+| Profile | `(settings)/profile.tsx` | `ProfileCard` | Name, email, avatar (uses Clerk UserProfileView) |
+| Subscription | `(settings)/subscription.tsx` | `PlanCard`, `PaywallSheet` | Current plan, upgrade button |
+
+**Reusable components to build:**
+
+| Component | Built from | Purpose |
+|-----------|-----------|---------|
+| `SettingsGroup` | Section list wrapper | Grouped rows with header |
+| `SettingsRow` | HeroUI `ListItem` | Label + value + chevron |
+| `PaywallSheet` | HeroUI `Sheet` | Feature-specific upgrade prompt |
+| `VoicePicker` | Custom list | Voice cards with preview, lock state |
+| `VipList` | FlatList + swipe | VIP emails with remove |
+
+**Backend needed:**
+- `preferences.get` — already built
+- `preferences.update` — already built
+- `preferences.addVip` — already built
+- `preferences.removeVip` — already built
+- `preferences.addMutedCategory` — already built
+- `preferences.removeMutedCategory` — already built
+- `connectedInboxes.list` — already built
+- `connectedInboxes.rename` — already built
+- `connectedInboxes.remove` — already built
+- `users.get` — already built
+- `users.update` — already built
+- `subscriptions.get` — already built
+
+**Completion criteria:**
+- Settings shows all groups with correct data
+- Connected inboxes list shows status, add/remove works
+- VIP list add/remove works
+- Category toggles work
+- Notification preferences save
+- Voice picker shows locked/unlocked states
+- Profile shows user info
+- Subscription shows plan status
+
+---
+
+### Phase 7: Subscription & Paywall Gating
+
+**Goal:** Free/Pro features are gated correctly.
+
+**Frontend route:** Built into existing screens + `PaywallSheet`
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| Paywall Sheet | Bottom sheet everywhere | `PaywallSheet` | Feature-specific upgrade prompt |
+| Usage Limit Banner | Inline in `(inbox)/index.tsx` | `UsageLimitBanner` | "Daily limit reached" banner |
+
+**Reusable components to build:**
+
+| Component | Built from | Purpose |
+|-----------|-----------|---------|
+| `PaywallSheet` | HeroUI `Sheet` | Specific to triggering feature, shows benefits + price |
+| `UsageLimitBanner` | Custom banner | Inline, not popup, when limit hit |
+
+**Backend needed:**
+- `subscriptions.upsert` — already built
+- RevenueCat webhook handler action — needs building
+- RevenueCat SDK integration — needs building
+- `subscriptions.get` — already built
+
+**Completion criteria:**
+- Free user sees paywall when tapping locked features
+- Pro user has full access
+- Usage banner appears when daily limit hit
+- Subscription status syncs via webhook
+
+---
+
+### Phase 8: Notifications
+
+**Goal:** User receives push notifications for urgent emails.
+
+**Frontend route:** None (background service)
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| (No new screens) | — | — | Notifications handled by background actions |
+
+**Backend needed:**
+- Push notification action — needs building
+- Quiet hours check logic — needs building
+- Token registration mutation — needs building
+
+**Completion criteria:**
+- Urgent emails trigger push notifications
+- Quiet hours suppress notifications
+- Notification opens app to message detail
+
+---
+
+### Phase 9: Chat / Voice Agent
+
+**Goal:** User can chat with an AI about their inbox.
+
+**Frontend route:** `app/(chat)/` (tab)
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| Chat Home | `(chat)/index.tsx` | `ChatThread`, `ChatInput`, `ExamplePrompts` | Chat thread, text input with mic, example prompt chips |
+| Voice Input | State on `(chat)/index.tsx` | `ListeningIndicator`, `PulseCircle` | Active listening state with pulsing circle |
+
+**Reusable components to build:**
+
+| Component | Built from | Purpose |
+|-----------|-----------|---------|
+| `ChatBubble` | HeroUI `Card` | User (right, brand) / Assistant (left, surface) bubbles |
+| `ActionChip` | HeroUI `Chip` | Shows action taken: "Snoozed 4 emails" |
+| `ChatInput` | HeroUI `Input` + mic icon | Text input with send/mic toggle |
+| `ExamplePrompts` | Horizontal chips | "What's urgent today?", "Any job offers?" |
+| `ListeningIndicator` | Reanimated circle | Pulsing circle during voice input |
+
+**Backend needed:**
+- `conversations.create` — already built
+- `conversations.list` — already built
+- `chatMessages.create` — already built
+- `chatMessages.list` — already built
+- Chat agent action (calls LLM with tools) — needs building
+- Speech-to-text action — needs building
+- Text-to-speech action (for voice replies) — needs building
+
+**Completion criteria:**
+- Chat thread shows messages with correct alignment
+- Text input sends message, AI responds
+- Action chips show when AI performs actions
+- Voice input works (speak → text → AI responds)
+- Example prompts show on empty state
+- Pro-only: free user sees paywall
+
+---
+
+### Phase 10: Background Sync & Cron Jobs
+
+**Goal:** Inboxes sync automatically, digests generate on schedule.
+
+**Frontend route:** None (background services)
+
+| Screen | Route | Components | Description |
+|--------|-------|------------|-------------|
+| (No new screens) | — | — | All background work via Convex crons |
+
+**Backend needed:**
+- Recurring inbox check cron — needs building
+- Daily digest generation cron — needs building
+- Permission refresh cron — needs building
+- Token refresh action — needs building
+
+**Completion criteria:**
+- Inboxes sync every few minutes
+- Digest generates at user's preferred time
+- Permissions refresh before expiry
+- Broken inboxes show status in settings
+
+---
+
+### Build Order Summary
+
+```
+Phase 1:  App Shell — Clerk webhook, bottom tabs, reusable header   ← YOU ARE HERE
+Phase 2:  Connect Inbox (Gmail OAuth) + Priority Inbox Feed
+Phase 3:  Message Actions & Feedback
+Phase 4:  Walkthrough Overlay
+Phase 5:  Daily Digest
+Phase 6:  Settings & Preferences
+Phase 7:  Subscription & Paywall Gating
+Phase 8:  Notifications
+Phase 9:  Chat / Voice Agent
+Phase 10: Background Sync & Cron Jobs
+```
+
+**Rule:** Do not start Phase N+1 until Phase N is fully working end-to-end (backend deployed, frontend wired, tested on device).

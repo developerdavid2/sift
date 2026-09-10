@@ -8,8 +8,18 @@
  * @module
  */
 
+import type * as chatMessages from "../chatMessages.js";
+import type * as classifications from "../classifications.js";
+import type * as connectedInboxes from "../connectedInboxes.js";
+import type * as conversations from "../conversations.js";
+import type * as digests from "../digests.js";
 import type * as healthCheck from "../healthCheck.js";
+import type * as http from "../http.js";
+import type * as messages from "../messages.js";
+import type * as preferences from "../preferences.js";
 import type * as privateData from "../privateData.js";
+import type * as subscriptions from "../subscriptions.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -18,8 +28,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  chatMessages: typeof chatMessages;
+  classifications: typeof classifications;
+  connectedInboxes: typeof connectedInboxes;
+  conversations: typeof conversations;
+  digests: typeof digests;
   healthCheck: typeof healthCheck;
+  http: typeof http;
+  messages: typeof messages;
+  preferences: typeof preferences;
   privateData: typeof privateData;
+  subscriptions: typeof subscriptions;
+  users: typeof users;
 }>;
 
 /**
