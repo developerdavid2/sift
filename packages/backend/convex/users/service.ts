@@ -1,10 +1,10 @@
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx, MutationCtx } from "../lib/types";
-import { notAuthenticated } from "../lib/errors";
+import { notAuthenticated, conflict } from "../lib/errors";
+import type { MutationCtx, QueryCtx } from "../lib/types";
 
-import { userRepository } from "./repository";
-import type { UserPatch } from "./repository";
 import { preferenceRepository } from "../preferences/repository";
+import type { UserPatch } from "./repository";
+import { userRepository } from "./repository";
 
 type ClerkUserData = {
   id: string;
@@ -61,15 +61,33 @@ async function createUserWithDefaults(
   return userDocId;
 }
 
+async function createUser(
+  ctx: MutationCtx,
+  input: UserProfileInput,
+): Promise<Id<"users">> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw notAuthenticated();
+
+  const existing = await userRepository.byExternalId(ctx, identity.subject);
+  if (existing) throw conflict("USER_EXISTS", "User record already exists");
+
+  return await createUserWithDefaults(ctx, {
+    userId: identity.subject,
+    name: input.name,
+    email: input.email,
+    avatarUrl: input.avatarUrl,
+  });
+}
+
 async function ensureUser(
   ctx: MutationCtx,
   input: UserProfileInput,
 ): Promise<Id<"users">> {
-  const existing = await getCurrentUser(ctx);
-  if (existing) return existing._id;
-
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw notAuthenticated();
+
+  const existing = await userRepository.byExternalId(ctx, identity.subject);
+  if (existing) return existing._id;
 
   return await createUserWithDefaults(ctx, {
     userId: identity.subject,
@@ -138,6 +156,7 @@ export const userService = {
   getCurrentUser,
   getCurrentUserOrThrow,
   createUserWithDefaults,
+  createUser,
   ensureUser,
   updateProfile,
   upsertFromClerk,

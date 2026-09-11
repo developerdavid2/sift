@@ -267,6 +267,7 @@ function TabIcon({
         name={activeIndex === index ? page.iconFilled : page.icon}
         size={22}
         style={colorStyle}
+        color={color.muted}
       />
     </Animated.View>
   );
@@ -281,15 +282,6 @@ export function TabPagerScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [pageWidth, setPageWidth] = useState(Dimensions.get("window").width);
   const { position } = usePagerPosition(pageWidth, scrollX);
-
-  useAnimatedReaction(
-    () => scrollX.value,
-    (current) => {
-      if (isProgrammaticScroll.value) {
-        scrollTo(listRef, current, 0, false);
-      }
-    },
-  );
 
   const handler = useAnimatedScrollHandler({
     onScroll: (event) => {
