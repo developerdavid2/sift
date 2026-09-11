@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 
-import { useNetworkStatus } from "@/hooks/use-network-status";
+import { useNetworkStatus } from "@/hooks/utils/use-network-status";
 import { useThemeColors } from "@/lib/theme";
 
 export function OfflineBanner() {

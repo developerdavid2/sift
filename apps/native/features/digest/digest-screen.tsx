@@ -12,7 +12,7 @@ import type {
   TabPagerHeaderProps,
   TabPagerPageProps,
 } from "@/components/tab-pager-types";
-import { useQueryState } from "@/hooks/use-query";
+import { useQueryState } from "@/hooks/queries/use-query";
 import { useThemeColors } from "@/lib/theme";
 
 type DigestResult = FunctionReturnType<typeof api.digests.entries.getToday>;

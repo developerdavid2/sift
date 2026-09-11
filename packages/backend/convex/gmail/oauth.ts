@@ -5,6 +5,8 @@ import { env } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
 
+import type { Id } from "../_generated/dataModel";
+
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile";
 
@@ -39,8 +41,12 @@ function oauthConfig() {
   };
 }
 
-type ExchangeResult =
+export type ExchangeResult =
   | { ok: true; accessToken: string; refreshToken: string | null }
+  | { ok: false; error: string };
+
+export type AccessTokenResult =
+  | { ok: true; accessToken: string }
   | { ok: false; error: string };
 
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
@@ -111,6 +117,53 @@ async function exchangeAuthCode(
     accessToken: tokenJson.access_token,
     refreshToken: tokenJson.refresh_token ?? null,
   };
+}
+
+export async function refreshAccessToken(
+  refreshToken: string,
+): Promise<AccessTokenResult> {
+  const { clientId, clientSecret } = oauthConfig();
+  if (!clientId || !clientSecret) {
+    return {
+      ok: false,
+      error: "Google OAuth config missing on this deployment.",
+    };
+  }
+
+  try {
+    const response = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }).toString(),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(
+        "Gmail token refresh failed:",
+        response.status,
+        body.slice(0, 500),
+      );
+      return {
+        ok: false,
+        error: `Google token refresh failed (HTTP ${response.status}).`,
+      };
+    }
+
+    const tokenJson = (await response.json()) as { access_token?: string };
+    if (!tokenJson.access_token) {
+      return { ok: false, error: "Google did not return an access token." };
+    }
+    return { ok: true, accessToken: tokenJson.access_token };
+  } catch (error) {
+    console.error("Gmail token refresh failed:", error);
+    return { ok: false, error: "Could not refresh the Gmail access token." };
+  }
 }
 
 type ProfileResult =
@@ -250,12 +303,19 @@ export const handleOAuthCallback = internalAction({
     const save: {
       status: "connected" | "already-connected";
       emailAddress: string;
+      inboxId: Id<"connectedInboxes">;
     } = await ctx.runMutation(internal.gmail.internal.saveConnectedInbox, {
       userId: stateRow.userId,
       state: args.state,
       emailAddress: profile.emailAddress,
       encryptedTokens,
     });
+
+    if (save.status === "connected") {
+      await ctx.scheduler.runAfter(0, internal.gmail.sync.syncInbox, {
+        inboxId: save.inboxId,
+      });
+    }
 
     return {
       ok: true,
@@ -329,6 +389,12 @@ export const completeNativeConnect = internalAction({
         encryptedTokens,
       },
     );
+
+    if (save.status === "connected") {
+      await ctx.scheduler.runAfter(0, internal.gmail.sync.syncInbox, {
+        inboxId: save.inboxId,
+      });
+    }
 
     return {
       ok: true,

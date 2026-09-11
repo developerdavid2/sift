@@ -40,6 +40,33 @@ export function useConnectInbox() {
       const GoogleAuth = module.default;
       GoogleAuth.configure({ webClientId: env.EXPO_PUBLIC_GOOGLE_CLIENT_ID });
 
+      try {
+        await GoogleAuth.signOut();
+      } catch (error) {
+        console.warn("[sift:connect] signOut skipped:", error);
+      }
+      const signIn = await GoogleAuth.signIn({});
+      if (signIn.type !== "success") {
+        const canceled = signIn.type === "cancelled";
+        setState(
+          canceled
+            ? { status: "canceled" }
+            : {
+                status: "error",
+                message:
+                  "No Google account found on this device. Add an account in Settings, then try again.",
+              },
+        );
+        toast.show({
+          variant: canceled ? "default" : "danger",
+          label: canceled ? "Connection canceled" : "Couldn't connect",
+          description: canceled
+            ? "No changes were made."
+            : "No Google account was selected.",
+        });
+        return "handled";
+      }
+
       for (let attempt = 0; attempt <= MAX_NATIVE_RETRIES; attempt++) {
         const authorization = await GoogleAuth.requestAuthorization({
           scopes: [GMAIL_SCOPE],

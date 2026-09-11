@@ -532,9 +532,9 @@ This section defines the exact build order. Each phase must be fully complete (b
 
 ### Phase 2: Connect Inbox (Gmail OAuth) + Priority Inbox Feed
 
-**Goal:** User connects their first Gmail inbox directly from the Inbox tab when it's empty, then sees their email feed sorted by AI urgency. **Frontend foundation above is built, and Gmail OAuth connect is fully working** — remaining work is the sync action that pulls real messages into the `messages` table and the classification pipeline that scores them.
+**Goal:** User connects their first Gmail inbox directly from the Inbox tab when it's empty, then sees their email feed sorted by AI urgency. **Frontend foundation, Gmail OAuth connect, and the sync + classification pipeline are all built** — the feed now fills with real messages on a fresh connect, auto-sorted by urgency.
 
-**What was built for OAuth connect (now complete):**
+**What was built for OAuth connect + sync (now complete):**
 
 | Area | Files | Status |
 |------|-------|--------|
@@ -542,32 +542,31 @@ This section defines the exact build order. Each phase must be fully complete (b
 | **Native connect hook** | `apps/native/features/inbox/use-connect-inbox.ts` | ✅ Auto-retry on refresh-token suppression; toasts for feedback |
 | **Backend token exchange** | `packages/backend/convex/gmail/entries.ts` (`completeNativeConnect`) | ✅ Native path (no `redirect_uri`) + browser path (`/api/gmail/callback`) |
 | **Token storage** | `packages/backend/convex/gmail/oauth.ts` (WebCrypto AES-GCM encrypt/decrypt) | ✅ Encrypted with `GOOGLE_TOKEN_ENCRYPTION_KEY` |
-| **Refresh-token self-heal** | `gmail/oauth.ts` `completeNativeConnect` + `gmail/internal.ts` `getConnectedInboxByEmail` | ✅ Detects suppressed refresh token → revokes stale grant → auto-retry |
-| **Disconnect with revocation** | `gmail/oauth.ts` `disconnectAndRevoke` action → decrypt + Google revoke endpoint + cascade delete | ✅ Tested on device |
+| **Refresh-token self-heal** | `gmail/oauth.ts` `completeNativeConnect` + `gmail/internal.ts` `getConnectedInboxByUserAndEmail` | ✅ Detects suppressed refresh token → revokes stale grant → auto-retry |
+| **Disconnect with revocation** | `gmail/oauth.ts` `disconnectAndRevoke` action → decrypt + Google revoke endpoint + cascade delete | ✅ Tested on device; returns `{ removed, revoked }` so the client only claims revocation when Google confirmed it |
 | **Deep-link return route** | `apps/native/app/oauth-complete.tsx` + registered in `_layout.tsx` | ✅ Handles browser-flow redirect with auto-navigation |
 | **Env wiring** | `EXPO_PUBLIC_GOOGLE_CLIENT_ID` in `apps/native/.env` + `packages/env/src/native.ts` | ✅ Shared web client ID for native AuthorizationClient |
+| **Sync action** | `gmail/sync.ts` `syncInbox` (internal) + `gmail/entries.ts` `syncInbox` (public, ownership-checked) | ✅ First sync via `messages.list` (`in:inbox`, page-resumable via `syncToken`); incremental via `history.list` (`startHistoryId` → `historyId`); batches of 25 with `runAfter(0, …)` continuation; auto-kicked right after a successful connect |
+| **messages insert** | `messages/internal.ts` `insertMessages` | ✅ Dedupes by `gmailMessageId`, returns created ids for classification |
+| **Classification (v1)** | `classifications/scorer.ts` (heuristic) + `classifications/internal.ts` `insertClassifications` | ✅ Deterministic keyword rules → urgency/category/reason, `modelVersion: "heuristic-v1"` so an LLM scorer can slot in later |
+| **Access-token refresh** | `gmail/oauth.ts` `refreshAccessToken` | ✅ Stored refresh token → fresh access token per sync run |
+| **Sync markers** | `gmail/internal.ts` `updateInboxSyncState` | ✅ Persists `historyId` / `historyId`+`syncToken` / clears both when first sync completes |
 
 **Backend still needed:**
-- Gmail sync action — needs building (pulls new messages per inbox using `history.list`)
-- `messages.insert` action — needs building (batch insert synced messages)
-- `messages.getPriorityFeed` — already built
-- `messages.get` — already built
-- `messages.getCounts` — already built
-- `messages.markHandled` — already built
-- `messages.snooze` — already built
-- `messages.markRead` — already built
 - `feedback.upsert` mutation — needs building (for "Not Important" action)
+- LLM-based classification (optional swap-in behind `classifications/scorer.ts`; heuristic v1 is live today)
+- `messagesDeleted` handling in incremental sync (Gmail deletes are currently ignored)
 
 **Completion criteria:**
 - ✅ Inbox tab shows "Connect Gmail" empty state when no inbox is connected
 - ✅ User taps "Connect Gmail" → Google account picker opens (native system sheet on Android/iOS, browser fallback on web)
 - ✅ User grants permission → tokens stored in `connectedInboxes` (encrypted)
 - ✅ Disconnect button revokes tokens on Google's side and clears local rows
-- ✅ Gmail sync action — needs building
-- Inbox shows messages sorted by urgency (waiting on sync)
-- Filter chips filter by urgency level (built, needs real data)
-- Swipe right marks handled, swipe left opens snooze sheet (built)
-- Tap opens message detail with AI summary (built)
+- ✅ Gmail sync action — first sync auto-runs on connect, incremental via `history.list`
+- ✅ Inbox shows messages sorted by urgency
+- ✅ Filter chips filter by urgency level
+- Swipe right marks handled, swipe left opens snooze sheet (built, waiting on Phase 3 wiring)
+- Tap opens message detail with AI summary (built, waiting on Phase 3 wiring)
 
 ---
 
@@ -843,7 +842,8 @@ Phase 2:  Connect Inbox (Gmail OAuth) + Priority Inbox Feed         ← YOU ARE 
             pull-to-refresh, redesigned screens)                    ✅ done
             Gmail OAuth connect (native-first + browser fallback)   ✅ done
             + disconnect w/ Google-side revocation, self-heal
-            Gmail sync + classification pipeline                    [ next ]
+            Gmail sync + classification pipeline                    ✅ done
+            (messages.list → history.list, heuristic classifier v1)
 Phase 3:  Message Actions & Feedback
 Phase 4:  Walkthrough Overlay
 Phase 5:  Daily Digest

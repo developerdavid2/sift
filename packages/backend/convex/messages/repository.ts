@@ -15,6 +15,18 @@ export const messageRepository = {
     return await ctx.db.get("messages", id);
   },
 
+  async byGmailMessageId(
+    ctx: { db: DbReader },
+    gmailMessageId: string,
+  ): Promise<Doc<"messages"> | null> {
+    return await ctx.db
+      .query("messages")
+      .withIndex("by_gmailMessageId", (q) =>
+        q.eq("gmailMessageId", gmailMessageId),
+      )
+      .unique();
+  },
+
   async byInbox(
     ctx: { db: DbReader },
     inboxId: Id<"connectedInboxes">,

@@ -16,10 +16,11 @@ import type { TabPagerPageProps } from "@/components/tab-pager-types";
 import { EmailCard } from "@/features/inbox/components/email-card";
 import { FilterChips } from "@/features/inbox/components/filter-chips";
 import type { FilterKey, PriorityFeedItem } from "@/features/inbox/types";
-import { useConnectInbox } from "@/features/inbox/use-connect-inbox";
-import { useDisconnectInbox } from "@/features/inbox/use-disconnect-inbox";
-import { useCurrentUser } from "@/hooks/use-current-user";
-import { useQueryState } from "@/hooks/use-query";
+import { useConnectInbox } from "@/features/inbox/hooks/use-connect-inbox";
+import { useDisconnectInbox } from "@/features/inbox/hooks/use-disconnect-inbox";
+import { useSyncInbox } from "@/features/inbox/hooks/use-sync-inbox";
+import { useCurrentUser } from "@/hooks/queries/use-current-user";
+import { useQueryState } from "@/hooks/queries/use-query";
 import { useThemeColors } from "@/lib/theme";
 
 const PAGE_SIZE = 20;
@@ -87,14 +88,12 @@ export const InboxScreen = (_props: TabPagerPageProps) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     void disconnect();
   }, [disconnect]);
+  const { syncAll } = useSyncInbox();
 
-  const pullToRefresh = useCallback(
-    () =>
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, 550);
-      }),
-    [],
-  );
+  const pullToRefresh = useCallback(async () => {
+    if (!inboxes.data) return;
+    await syncAll(inboxes.data.map((inbox) => inbox._id));
+  }, [inboxes.data, syncAll]);
 
   const screen = useMemo(() => {
     if (!userLoading && !isAuthenticated) {

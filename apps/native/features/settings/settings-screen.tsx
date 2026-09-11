@@ -12,8 +12,8 @@ import type {
   TabPagerHeaderProps,
   TabPagerPageProps,
 } from "@/components/tab-pager-types";
-import { useCurrentUser } from "@/hooks/use-current-user";
-import { useQueryState } from "@/hooks/use-query";
+import { useCurrentUser } from "@/hooks/queries/use-current-user";
+import { useQueryState } from "@/hooks/queries/use-query";
 import { useThemeColors } from "@/lib/theme";
 
 export const SettingsScreen = (_props: TabPagerPageProps) => {
