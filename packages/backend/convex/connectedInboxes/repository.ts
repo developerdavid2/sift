@@ -34,13 +34,16 @@ export const connectedInboxRepository = {
       .take(take);
   },
 
-  async byEmailAddress(
+  async byUserIdAndEmailAddress(
     ctx: { db: DbReader },
+    userId: string,
     emailAddress: string,
   ): Promise<InboxDoc | null> {
     return await ctx.db
       .query("connectedInboxes")
-      .withIndex("by_emailAddress", (q) => q.eq("emailAddress", emailAddress))
+      .withIndex("by_userId_and_emailAddress", (q) =>
+        q.eq("userId", userId).eq("emailAddress", emailAddress),
+      )
       .unique();
   },
 

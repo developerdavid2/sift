@@ -34,7 +34,7 @@ export const userRepository = {
   },
 
   async byId(ctx: { db: DbReader }, id: Id<"users">): Promise<UserDoc | null> {
-    return await ctx.db.get("users", id);
+    return await ctx.db.get(id);
   },
 
   async insert(ctx: { db: DbWriter }, input: UserInsert): Promise<Id<"users">> {

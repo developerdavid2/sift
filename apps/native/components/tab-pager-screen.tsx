@@ -6,31 +6,31 @@ import Animated, {
   Extrapolation,
   interpolate,
   interpolateColor,
-  useAnimatedReaction,
   useAnimatedRef,
   useAnimatedScrollHandler,
+  scrollTo,
+  useAnimatedReaction,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withSpring,
-  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ChatScreen } from "@/features/chat/chat-screen";
-import { ChatHeader } from "@/features/chat/chat-screen";
-import { DigestHeader, DigestScreen } from "@/features/digest/digest-screen";
-import { InboxHeader, InboxScreen } from "@/features/inbox/inbox-screen";
-import {
-  SettingsHeader,
-  SettingsScreen,
-} from "@/features/settings/settings-screen";
+import { OfflineBanner } from "@/components/offline-banner";
 import type {
   TabPagerHeaderProps,
   TabPagerPageProps,
 } from "@/components/tab-pager-types";
+import { ChatHeader, ChatScreen } from "@/features/chat/chat-screen";
+import { DigestHeader, DigestScreen } from "@/features/digest/digest-screen";
+import { InboxScreen } from "@/features/inbox/inbox-screen";
+import {
+  SettingsHeader,
+  SettingsScreen,
+} from "@/features/settings/settings-screen";
 import { useThemeColors } from "@/lib/theme";
+import { InboxHeader } from "@/features/inbox/components/inbox-header";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -313,6 +313,7 @@ export function TabPagerScreen() {
       onLayout={(e) => setPageWidth(e.nativeEvent.layout.width)}
     >
       <PagerHeader position={position} scrollY={scrollY} />
+      <OfflineBanner />
 
       <AnimatedFlatList
         ref={listRef}

@@ -99,6 +99,7 @@ function AppStack() {
       <Stack.Protected guard={isSignedIn!}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="congrats" />
+        <Stack.Screen name="oauth-complete" />
       </Stack.Protected>
     </Stack>
   );

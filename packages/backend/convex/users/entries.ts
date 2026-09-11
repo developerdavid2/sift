@@ -2,7 +2,6 @@ import { query, mutation } from "../_generated/server";
 import { v } from "convex/values";
 
 import { userService } from "./service";
-import { notAuthenticated, conflict } from "../lib/errors";
 
 export const get = query({
   args: {},
@@ -18,18 +17,7 @@ export const create = mutation({
     avatarUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw notAuthenticated();
-
-    const existing = await userService.getCurrentUser(ctx);
-    if (existing) throw conflict("USER_EXISTS", "User record already exists");
-
-    return await userService.createUserWithDefaults(ctx, {
-      userId: identity.subject,
-      name: args.name,
-      email: args.email,
-      avatarUrl: args.avatarUrl,
-    });
+    return await userService.createUser(ctx, args);
   },
 });
 

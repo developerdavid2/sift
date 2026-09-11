@@ -1,89 +1,155 @@
-import { Modal, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { api } from "@sift/backend/convex/_generated/api";
+import { UserProfileView } from "@clerk/expo/native";
+import { useAuth } from "@clerk/expo";
+import * as Haptics from "expo-haptics";
+import { useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
+import { SettingsGroup, SettingsRow } from "@/components/settings-group";
 import type {
   TabPagerHeaderProps,
   TabPagerPageProps,
 } from "@/components/tab-pager-types";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { useQueryState } from "@/hooks/use-query";
 import { useThemeColors } from "@/lib/theme";
-import { useMemo, useState } from "react";
-import { BottomSheet, Button } from "heroui-native";
-import { UserProfileView } from "@clerk/expo/native";
-import { Ionicons } from "@expo/vector-icons";
 
 export const SettingsScreen = (_props: TabPagerPageProps) => {
   const colors = useThemeColors();
-  const themedStyles = useMemo(
-    () => ({
-      sectionTitle: {
-        ...styles.sectionTitle,
-        color: colors.muted,
-      },
-    }),
-    [colors],
-  );
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const { user } = useCurrentUser();
+  const { signOut } = useAuth();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  const inboxes = useQueryState(api.connectedInboxes.entries.list, {});
+  const subscription = useQueryState(api.subscriptions.entries.get, {});
+
+  const inboxCount = inboxes.data?.length ?? 0;
+  const planLabel =
+    subscription.data?.plan === "pro" || user?.plan === "pro"
+      ? "Sift Pro"
+      : "Free plan";
+
+  const firstName = user?.name?.split(" ")[0] ?? "there";
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  };
 
   return (
-    <Container isScrollable={false}>
-      <View style={styles.body}>
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          Account & preferences
-        </Text>
-        <Text style={[styles.hint, { color: colors.muted }]}>
-          Inboxes, VIPs, notifications and subscription will live here.
-        </Text>
-      </View>
+    <Container isScrollable>
+      <View style={styles.content}>
+        <Pressable
+          onPress={() => setIsProfileOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="My account"
+          style={({ pressed }) => [
+            styles.profile,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.separator,
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.profileAvatar,
+              { backgroundColor: colors.brandPrimarySoft },
+            ]}
+          >
+            <Text
+              style={[styles.profileInitials, { color: colors.brandPrimary }]}
+            >
+              {initials(user?.name)}
+            </Text>
+          </View>
+          <View style={styles.profileMeta}>
+            <Text
+              numberOfLines={1}
+              style={[styles.profileName, { color: colors.foreground }]}
+            >
+              {user?.name ?? "Guest"}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[styles.profileEmail, { color: colors.muted }]}
+            >
+              {user?.email ?? "Sign in to sync"}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
 
-      <Button onPress={() => setIsAuthOpen(true)}>User Profile</Button>
+        <SettingsGroup title="Account">
+          <SettingsRow
+            icon="person-outline"
+            label="My account"
+            value={firstName}
+            onPress={() => setIsProfileOpen(true)}
+          />
+          <SettingsRow
+            icon="diamond-outline"
+            label="Sift plan"
+            value={planLabel}
+            onPress={handlePress}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title="Inboxes">
+          <SettingsRow
+            icon="mail-unread-outline"
+            label="Connected inboxes"
+            value={inboxCount > 0 ? `${inboxCount}` : "Not connected"}
+            disabled
+          />
+          <SettingsRow
+            icon="notifications-outline"
+            label="Notification rules"
+            disabled
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title="Personalization">
+          <SettingsRow icon="star-outline" label="VIP senders" disabled />
+          <SettingsRow icon="funnel-outline" label="Category rules" disabled />
+          <SettingsRow icon="mic-outline" label="Digest voice" disabled />
+        </SettingsGroup>
+
+        <SettingsGroup title="Support">
+          <SettingsRow
+            icon="help-buoy-outline"
+            label="Help & feedback"
+            onPress={handlePress}
+          />
+          <SettingsRow
+            icon="log-out-outline"
+            label="Sign out"
+            tone="danger"
+            onPress={signOut}
+          />
+        </SettingsGroup>
+      </View>
 
       <Modal
         animationType="slide"
-        visible={isAuthOpen}
+        visible={isProfileOpen}
         presentationStyle="pageSheet"
-        onRequestClose={() => setIsAuthOpen(false)}
+        onRequestClose={() => setIsProfileOpen(false)}
       >
-        <UserProfileView onDismiss={() => setIsAuthOpen(false)} />
+        <UserProfileView onDismiss={() => setIsProfileOpen(false)} />
       </Modal>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Ionicons
-            name="albums-outline"
-            size={16}
-            color={colors.brandPrimary}
-          />
-          <Text style={themedStyles.sectionTitle}>Bottom Sheet</Text>
-        </View>
-        <BottomSheet>
-          <BottomSheet.Trigger asChild>
-            <Button variant="outline">
-              <Button.Label>Open Sheet</Button.Label>
-            </Button>
-          </BottomSheet.Trigger>
-          <BottomSheet.Portal>
-            <BottomSheet.Overlay />
-            <BottomSheet.Content detached={false} className="rounded-t-3xl">
-              <BottomSheet.Close />
-              <BottomSheet.Title>Snooze or archive</BottomSheet.Title>
-              <BottomSheet.Description>
-                Choose what happens next to this message.
-              </BottomSheet.Description>
-              <View style={styles.buttonStack} className="mt-4">
-                <Button variant="secondary" className="w-full">
-                  <Button.Label>Snooze</Button.Label>
-                </Button>
-                <Button variant="secondary" className="w-full">
-                  <Button.Label>Archive</Button.Label>
-                </Button>
-              </View>
-            </BottomSheet.Content>
-          </BottomSheet.Portal>
-        </BottomSheet>
-      </View>
     </Container>
   );
 };
+
+function initials(name?: string): string {
+  const parts = (name ?? "?").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export function SettingsHeader({ title }: TabPagerHeaderProps) {
   const colors = useThemeColors();
@@ -97,28 +163,42 @@ export function SettingsHeader({ title }: TabPagerHeaderProps) {
 }
 
 const styles = StyleSheet.create({
-  body: {
-    flex: 1,
+  content: {
+    padding: 20,
+    paddingBottom: 32,
+  },
+  profile: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+    marginBottom: 26,
+  },
+  profileAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
-    gap: 8,
   },
-  title: {
-    fontSize: 22,
+  profileInitials: {
+    fontSize: 18,
     fontFamily: "Manrope_700Bold",
-    letterSpacing: -0.5,
   },
-  hint: {
-    fontSize: 14,
+  profileMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  profileName: {
+    fontSize: 17,
+    fontFamily: "Manrope_700Bold",
+    letterSpacing: -0.3,
+  },
+  profileEmail: {
+    fontSize: 13,
     fontFamily: "Manrope_400Regular",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.5,
   },
   header: {
     flex: 1,
@@ -126,22 +206,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingBottom: 12,
   },
-  section: {
-    marginBottom: 28,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  buttonStack: {
-    gap: 10,
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
 });

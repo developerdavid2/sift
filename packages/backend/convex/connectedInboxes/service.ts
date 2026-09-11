@@ -46,11 +46,12 @@ async function add(
 ): Promise<Id<"connectedInboxes">> {
   const user = await userService.getCurrentUserOrThrow(ctx);
 
-  const existing = await connectedInboxRepository.byEmailAddress(
+  const existing = await connectedInboxRepository.byUserIdAndEmailAddress(
     ctx,
+    user.userId,
     input.emailAddress,
   );
-  if (existing && existing.userId === user.userId) {
+  if (existing) {
     throw conflict(
       "INBOX_ALREADY_CONNECTED",
       "This inbox is already connected",

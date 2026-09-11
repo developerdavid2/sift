@@ -1,15 +1,28 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx, MutationCtx, PaginationOpts } from "../lib/types";
+import type { PaginationResult } from "convex/server";
 import { notFound } from "../lib/errors";
 import { userService } from "../users/service";
 import { connectedInboxRepository } from "../connectedInboxes/repository";
 import { messageRepository } from "./repository";
 import { classificationRepository } from "../classifications/repository";
 
-const EMPTY_PAGE = { page: [], isDone: true, continueCursor: "" } as const;
+type FeedItem = Doc<"messages"> & {
+  classification: Doc<"classifications"> | null;
+};
+
+const EMPTY_PAGE: PaginationResult<FeedItem> = {
+  page: [],
+  isDone: true,
+  continueCursor: "",
+};
 
 type Urgency = "urgent" | "today" | "later";
-const URGENCY_ORDER: Record<Urgency, number> = { urgent: 0, today: 1, later: 2 };
+const URGENCY_ORDER: Record<Urgency, number> = {
+  urgent: 0,
+  today: 1,
+  later: 2,
+};
 
 async function ownedMessage(ctx: QueryCtx, messageId: Id<"messages">) {
   const user = await userService.getCurrentUser(ctx);
@@ -37,7 +50,10 @@ async function targetInboxIds(
   return ids.has(inboxId) ? [inboxId] : [];
 }
 
-async function withClassification(ctx: QueryCtx, message: Doc<"messages">) {
+async function withClassification(
+  ctx: QueryCtx,
+  message: Doc<"messages">,
+): Promise<FeedItem> {
   const classification = await classificationRepository.byMessageIdUnique(
     ctx,
     message._id,
@@ -165,7 +181,11 @@ async function getCounts(ctx: QueryCtx, inboxId?: Id<"connectedInboxes">) {
 
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-  const messages = await messageRepository.byReceivedAtGte(ctx, sevenDaysAgo, 500);
+  const messages = await messageRepository.byReceivedAtGte(
+    ctx,
+    sevenDaysAgo,
+    500,
+  );
 
   const counts = { ...zero };
   for (const message of messages) {
