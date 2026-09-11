@@ -44,6 +44,13 @@ export const deleteOauthState = internalMutation({
   },
 });
 
+export const getConnectedInboxById = internalQuery({
+  args: { inboxId: v.id("connectedInboxes") },
+  handler: async (ctx, args) => {
+    return (await connectedInboxRepository.byId(ctx, args.inboxId)) ?? null;
+  },
+});
+
 export const getConnectedInboxByUserAndEmail = internalQuery({
   args: { userId: v.string(), emailAddress: v.string() },
   handler: async (ctx, args) => {
@@ -83,11 +90,12 @@ export const saveConnectedInbox = internalMutation({
       return {
         status: "already-connected" as const,
         emailAddress: args.emailAddress,
+        inboxId: existing._id,
       };
     }
 
     const now = Date.now();
-    await connectedInboxRepository.insert(ctx, {
+    const inboxId = await connectedInboxRepository.insert(ctx, {
       userId: args.userId,
       emailAddress: args.emailAddress,
       encryptedTokens: args.encryptedTokens,
@@ -99,6 +107,7 @@ export const saveConnectedInbox = internalMutation({
     return {
       status: "connected" as const,
       emailAddress: args.emailAddress,
+      inboxId,
     };
   },
 });
@@ -107,6 +116,29 @@ export const listConnectedInboxesByUser = internalQuery({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
     return await connectedInboxRepository.byUserId(ctx, args.userId);
+  },
+});
+
+export const updateInboxSyncState = internalMutation({
+  args: {
+    inboxId: v.id("connectedInboxes"),
+    syncToken: v.optional(v.union(v.string(), v.null())),
+    historyId: v.optional(v.union(v.string(), v.null())),
+    lastSyncedAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const updates: Record<string, unknown> = {};
+    if (args.syncToken !== undefined) {
+      updates.syncToken = args.syncToken ?? undefined;
+    }
+    if (args.historyId !== undefined) {
+      updates.historyId = args.historyId ?? undefined;
+    }
+    if (args.lastSyncedAt !== undefined) {
+      updates.lastSyncedAt = args.lastSyncedAt;
+    }
+    updates.updatedAt = Date.now();
+    await ctx.db.patch("connectedInboxes", args.inboxId, updates);
   },
 });
 

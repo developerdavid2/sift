@@ -62,3 +62,34 @@ const styles = StyleSheet.create({
 If you see existing code using inline object styles or massive `StyleSheet` blocks for simple flex containers, margins, or text styles, automatically refactor them to Tailwind CSS `className` utilities.
 
 <!-- styling-ai-end -->
+
+<!-- hooks-ai-start -->
+
+## Custom Hooks Organization
+
+Keep the codebase maintainable by grouping hooks by ownership and category.
+
+### 1. Location Rules
+
+- **Feature-peculiar hooks** live inside the feature they belong to, under a `hooks/` subfolder:
+  `features/<feature>/hooks/use-<name>.ts` (e.g. `features/inbox/hooks/use-connect-inbox.ts`).
+  A hook is feature-peculiar if it's only meaningful for that screen/feature.
+- **Reusable hooks** live in the global `hooks/` folder, categorized by the kind of logic they encapsulate.
+
+### 2. Global Hook Categories
+
+Create the category subfolder on first use (don't pre-create empty folders):
+
+- `hooks/queries/` — hooks that read Convex query data (e.g. `use-current-user.ts`, `use-query.ts`)
+- `hooks/mutations/` — hooks that wrap Convex mutations/actions (writes)
+- `hooks/ui/` — UI/behavior hooks (gestures, keyboard, layout, haptics, etc.)
+- `hooks/routing/` — hooks tied to navigation/routing state
+- `hooks/utils/` — hooks for device/platform state and generic logic (e.g. `use-network-status.ts`)
+
+### 3. Naming
+
+- File names prefixed with `use-`: `use-<what-it-provides>.ts`.
+- Hook functions exported with the same `use` prefix.
+- Primary exports are named exports (default export only when a single hook must be the import target).
+
+<!-- hooks-ai-end -->

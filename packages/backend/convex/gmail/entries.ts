@@ -3,9 +3,10 @@ import { internal } from "../_generated/api";
 import { env } from "../_generated/server";
 import { v } from "convex/values";
 
-import { AppError, notAuthenticated } from "../lib/errors";
+import { AppError, forbidden, notAuthenticated } from "../lib/errors";
 
 import type { DisconnectResult, NativeConnectResult } from "./oauth";
+import type { SyncResult } from "./sync";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
@@ -73,6 +74,24 @@ export const disconnect = action({
 
     return await ctx.runAction(internal.gmail.oauth.disconnectAndRevoke, {
       userId: identity.subject,
+      inboxId: args.inboxId,
+    });
+  },
+});
+
+export const syncInbox = action({
+  args: { inboxId: v.id("connectedInboxes") },
+  handler: async (ctx, args): Promise<SyncResult> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw notAuthenticated();
+
+    const inbox = await ctx.runQuery(
+      internal.gmail.internal.getConnectedInboxById,
+      { inboxId: args.inboxId },
+    );
+    if (!inbox || inbox.userId !== identity.subject) throw forbidden();
+
+    return await ctx.runAction(internal.gmail.sync.syncInbox, {
       inboxId: args.inboxId,
     });
   },

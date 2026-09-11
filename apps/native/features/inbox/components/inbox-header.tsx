@@ -1,7 +1,7 @@
 import { IconButton } from "@/components/icon-button";
 import { TabPagerHeaderProps } from "@/components/tab-pager-types";
-import { useCurrentUser } from "@/hooks/use-current-user";
-import { useQueryState } from "@/hooks/use-query";
+import { useCurrentUser } from "@/hooks/queries/use-current-user";
+import { useQueryState } from "@/hooks/queries/use-query";
 import { useThemeColors } from "@/lib/theme";
 import { api } from "@sift/backend/convex/_generated/api";
 import { Avatar } from "heroui-native";
