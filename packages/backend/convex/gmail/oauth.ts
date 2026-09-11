@@ -25,6 +25,11 @@ export type NativeConnectResult =
     }
   | { ok: false; error: string; retry?: true };
 
+export type DisconnectResult = {
+  removed: number;
+  revoked: boolean;
+};
+
 function oauthConfig() {
   return {
     clientId: env.GOOGLE_OAUTH_CLIENT_ID,
@@ -40,15 +45,24 @@ type ExchangeResult =
 
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
-async function revokeGoogleAccess(accessToken: string): Promise<void> {
+async function revokeGoogleAccess(accessToken: string): Promise<boolean> {
   try {
-    await fetch(REVOKE_URL, {
+    const response = await fetch(REVOKE_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ token: accessToken }).toString(),
     });
+    if (!response.ok) {
+      console.error(
+        "Gmail access token revocation failed:",
+        response.status,
+      );
+      return false;
+    }
+    return true;
   } catch (error) {
     console.error("Gmail access token revocation failed:", error);
+    return false;
   }
 }
 
@@ -209,8 +223,11 @@ export const handleOAuthCallback = internalAction({
 
     if (!exchange.refreshToken) {
       const existing = await ctx.runQuery(
-        internal.gmail.internal.getConnectedInboxByEmail,
-        { emailAddress: profile.emailAddress },
+        internal.gmail.internal.getConnectedInboxByUserAndEmail,
+        {
+          userId: stateRow.userId,
+          emailAddress: profile.emailAddress,
+        },
       );
       if (existing) {
         return {
@@ -280,8 +297,11 @@ export const completeNativeConnect = internalAction({
 
     if (!exchange.refreshToken) {
       const existing = await ctx.runQuery(
-        internal.gmail.internal.getConnectedInboxByEmail,
-        { emailAddress: profile.emailAddress },
+        internal.gmail.internal.getConnectedInboxByUserAndEmail,
+        {
+          userId: args.userId,
+          emailAddress: profile.emailAddress,
+        },
       );
       if (existing) {
         return {
@@ -323,7 +343,7 @@ export const disconnectAndRevoke = internalAction({
     userId: v.string(),
     inboxId: v.optional(v.id("connectedInboxes")),
   },
-  handler: async (ctx, args): Promise<number> => {
+  handler: async (ctx, args): Promise<DisconnectResult> => {
     const { encryptionKey } = oauthConfig();
 
     const inboxes = await ctx.runQuery(
@@ -331,6 +351,7 @@ export const disconnectAndRevoke = internalAction({
       { userId: args.userId },
     );
 
+    let revoked = true;
     for (const inbox of inboxes) {
       if (args.inboxId && inbox._id !== args.inboxId) continue;
       try {
@@ -341,20 +362,31 @@ export const disconnectAndRevoke = internalAction({
           encryptionKey,
           inbox.encryptedTokens,
         );
-        await revokeGoogleAccess(refreshToken);
+        const ok = await revokeGoogleAccess(refreshToken);
+        if (!ok) {
+          console.error(
+            "Failed to revoke Gmail grant for",
+            inbox.emailAddress,
+            "; revoke access in Google account settings.",
+          );
+          revoked = false;
+        }
       } catch (error) {
         console.error(
           "Failed to revoke Gmail grant for",
           inbox.emailAddress,
           error,
         );
+        revoked = false;
       }
     }
 
-    return await ctx.runMutation(
+    const removed = await ctx.runMutation(
       internal.gmail.internal.disconnectInbox,
       { userId: args.userId, inboxId: args.inboxId },
     );
+
+    return { removed, revoked };
   },
 });
 

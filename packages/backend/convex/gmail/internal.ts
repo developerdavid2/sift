@@ -1,10 +1,14 @@
 import { internalMutation, internalQuery } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { v } from "convex/values";
 
 import { connectedInboxRepository } from "../connectedInboxes/repository";
 import { messageRepository } from "../messages/repository";
 import { classificationRepository } from "../classifications/repository";
 import { feedbackRepository } from "../feedback/repository";
+
+import type { MutationCtx } from "../lib/types";
+import type { Id } from "../_generated/dataModel";
 
 export const getOauthState = internalQuery({
   args: { state: v.string() },
@@ -40,10 +44,16 @@ export const deleteOauthState = internalMutation({
   },
 });
 
-export const getConnectedInboxByEmail = internalQuery({
-  args: { emailAddress: v.string() },
+export const getConnectedInboxByUserAndEmail = internalQuery({
+  args: { userId: v.string(), emailAddress: v.string() },
   handler: async (ctx, args) => {
-    return (await connectedInboxRepository.byEmailAddress(ctx, args.emailAddress)) ?? null;
+    return (
+      (await connectedInboxRepository.byUserIdAndEmailAddress(
+        ctx,
+        args.userId,
+        args.emailAddress,
+      )) ?? null
+    );
   },
 });
 
@@ -64,8 +74,9 @@ export const saveConnectedInbox = internalMutation({
       if (stateRow) await ctx.db.delete("gmailOauthStates", stateRow._id);
     }
 
-    const existing = await connectedInboxRepository.byEmailAddress(
+    const existing = await connectedInboxRepository.byUserIdAndEmailAddress(
       ctx,
+      args.userId,
       args.emailAddress,
     );
     if (existing) {
@@ -99,35 +110,41 @@ export const listConnectedInboxesByUser = internalQuery({
   },
 });
 
+const DISCONNECT_BATCH_SIZE = 100;
+
 export const disconnectInbox = internalMutation({
   args: {
     userId: v.string(),
     inboxId: v.optional(v.id("connectedInboxes")),
+    batchSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const batchSize = args.batchSize ?? DISCONNECT_BATCH_SIZE;
     const inboxes = await connectedInboxRepository.byUserId(ctx, args.userId);
     let removed = 0;
 
     for (const inbox of inboxes) {
       if (args.inboxId && inbox._id !== args.inboxId) continue;
 
-      const messages = await messageRepository.byInbox(ctx, inbox._id);
+      const messages = await messageRepository.byInbox(
+        ctx,
+        inbox._id,
+        batchSize + 1,
+      );
+      if (messages.length > batchSize) {
+        for (const message of messages.slice(0, batchSize)) {
+          await deleteMessage(ctx, message._id);
+        }
+        await ctx.scheduler.runAfter(
+          0,
+          internal.gmail.internal.disconnectInbox,
+          { userId: args.userId, inboxId: args.inboxId, batchSize },
+        );
+        return removed;
+      }
+
       for (const message of messages) {
-        for (const classification of await classificationRepository.byMessage(
-          ctx,
-          message._id,
-        )) {
-          await classificationRepository.delete(ctx, classification._id);
-        }
-
-        for (const feedback of await feedbackRepository.byMessage(
-          ctx,
-          message._id,
-        )) {
-          await feedbackRepository.delete(ctx, feedback._id);
-        }
-
-        await messageRepository.delete(ctx, message._id);
+        await deleteMessage(ctx, message._id);
       }
 
       await connectedInboxRepository.delete(ctx, inbox._id);
@@ -137,3 +154,18 @@ export const disconnectInbox = internalMutation({
     return removed;
   },
 });
+
+async function deleteMessage(ctx: MutationCtx, messageId: Id<"messages">) {
+  for (const classification of await classificationRepository.byMessage(
+    ctx,
+    messageId,
+  )) {
+    await classificationRepository.delete(ctx, classification._id);
+  }
+
+  for (const feedback of await feedbackRepository.byMessage(ctx, messageId)) {
+    await feedbackRepository.delete(ctx, feedback._id);
+  }
+
+  await messageRepository.delete(ctx, messageId);
+}

@@ -19,14 +19,23 @@ export function useDisconnectInbox() {
   const disconnect = useCallback(async () => {
     setState({ status: "disconnecting" });
     try {
-      const removed = await disconnectAction({});
-      console.log("[sift:disconnect] removed inboxes:", removed);
+      const result = await disconnectAction({});
+      console.log("[sift:disconnect] removed inboxes:", result.removed, "revoked:", result.revoked);
       setState({ status: "disconnected" });
-      toast.show({
-        variant: "success",
-        label: "Inbox disconnected",
-        description: "Gmail access has been revoked on Google's side too.",
-      });
+      if (result.revoked) {
+        toast.show({
+          variant: "success",
+          label: "Inbox disconnected",
+          description: "Gmail access has been revoked on Google's side too.",
+        });
+      } else {
+        toast.show({
+          variant: "warning",
+          label: "Inbox disconnected",
+          description:
+            "Gmail still has access. Revoke it in your Google account settings to be safe.",
+        });
+      }
     } catch (error) {
       console.error("[sift:disconnect] error:", error);
       setState({ status: "idle" });

@@ -28,7 +28,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_userId", ["userId"])
-    .index("by_emailAddress", ["emailAddress"]),
+    .index("by_userId_and_emailAddress", ["userId", "emailAddress"]),
 
   // ──────────────────────────────────────────────
   // gmailOauthStates — one-time OAuth callback state
