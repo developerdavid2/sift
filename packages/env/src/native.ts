@@ -14,6 +14,7 @@ export const env = createEnv({
     EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID: z.string().min(1),
     EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID: z.string().min(1),
     EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID: z.string().min(1),
+    EXPO_PUBLIC_GOOGLE_CLIENT_ID: z.string().min(1),
   },
   runtimeEnv: {
     EXPO_PUBLIC_CONVEX_URL: process.env.EXPO_PUBLIC_CONVEX_URL,
@@ -25,6 +26,7 @@ export const env = createEnv({
       process.env.EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID,
     EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID:
       process.env.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
+    EXPO_PUBLIC_GOOGLE_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
   },
   emptyStringAsUndefined: true,
 });

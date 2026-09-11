@@ -30,6 +30,18 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_emailAddress", ["emailAddress"]),
 
+  // ──────────────────────────────────────────────
+  // gmailOauthStates — one-time OAuth callback state
+  // ──────────────────────────────────────────────
+  gmailOauthStates: defineTable({
+    state: v.string(),
+    userId: v.string(),
+    returnUrl: v.string(),
+    expiresAt: v.number(),
+  })
+    .index("by_state", ["state"])
+    .index("by_userId", ["userId"]),
+
   messages: defineTable({
     inboxId: v.id("connectedInboxes"),
     gmailMessageId: v.string(),

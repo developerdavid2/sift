@@ -292,15 +292,20 @@ Convex splits logic into three flavors. It matters which one something is, becau
 This is the part most likely to be built wrong if it isn't spelled out, so here it is in full:
 
 1. The person taps "Connect a Gmail inbox" (either during onboarding or later from Connected Inboxes).
-2. The app opens a secure in-app browser session pointed at Google's own permission screen — **not** the native one-tap sign-in used for logging into the app. This is a deliberate, separate request specifically asking to read that inbox's mail.
-3. The person picks any Google account on that screen — it does not need to match the account they used to log into Sift.
-4. Google redirects back into the app with a short-lived code.
-5. The app hands that code to an action, which exchanges it with Google for a long-lived permission (a refresh token) and a short-lived access pass. Only the long-lived one is stored — access passes are re-requested behind the scenes whenever needed and are never kept around.
+2. On Android and iOS, the app asks Google through the operating system's native account system directly — **Credential Manager + Google Identity Services** on Android and the **GoogleSignIn SDK** on iOS (via `expo-google-credential-auth`), so the person sees the system account sheet, not a browser. On web (or if the native module isn't available, e.g. Expo Go), it falls back to a secure in-app browser session pointed at Google's own permission screen. Whether native or browser, this is deliberately separate from the identity-only sign-in used to log into the app.
+3. The person picks any Google account — it does not need to match the account they used to log into Sift.
+4. Google returns a short-lived one-time server auth code. Native and browser paths both end here: the code is handed to an action.
+5. The app hands that code to `gmail.entries.completeNativeConnect` (native) or the `GET /api/gmail/callback` HTTP route (browser), either of which exchanges it with Google for a long-lived permission (a refresh token) and a short-lived access pass. Only the long-lived one is stored (encrypted with `GOOGLE_TOKEN_ENCRYPTION_KEY`) — access passes are re-requested behind the scenes whenever needed and are never kept around.
 6. A new row is created in `connectedInboxes`, linked to the signed-in person, holding the Gmail address, the encrypted permission, and a starting point for syncing.
 7. The first sync begins immediately, pulling recent mail and running each new message through classification.
 8. From this point forward, a recurring background check (see section 11) revisits this specific inbox on its own schedule, completely independent of any other inbox the person may have connected.
 
 If a person tries to connect an inbox that's already connected (by them or, in a future version, potentially someone else), the app should recognize the duplicate and simply show it as already connected rather than creating a second copy.
+
+**Two wrinkles we've already handled, so they stay invisible to the user:**
+
+- **Google's refresh-token suppression.** If a person has previously approved this app for the same account + scopes (even after revoking on our side), Google will not hand out a second refresh token. The backend detects this, revokes the lingering grant on Google's side in the background, and returns a `retry` signal — the client automatically runs one more authorization round and finishes the connect in a single button press, showing at most a "Unlinked an old Google approval" toast.
+- **Disconnect truly unlinks.** `gmail.entries.disconnect` is an action that decrypts the stored permission and revokes it with Google *before* deleting the rows, so connect/disconnect loops never accumulate stale grants.
 
 ---
 
@@ -371,6 +376,59 @@ Since this is a digital subscription bought from inside a native app, it must go
 
 **Build order, feature by feature, backend before interface each time:** See **Section 16: Implementation Roadmap** for the detailed phase-by-phase build plan with exact screen names, components, and backend dependencies.
 
+### RN Styling Paradigm: Tailwind CSS vs. StyleSheet
+
+We blend Tailwind CSS (via NativeWind) and React Native's native `StyleSheet` API. This strict architectural boundary applies to all UI components.
+
+**1. Tailwind CSS (NativeWind) — The Default Choice**
+Use Tailwind CSS utility classes (`className="..."`) for **80-90% of all UI code**, focusing entirely on presentation, layouts, and typography.
+* **Layouts & Spacing:** Always use Tailwind for Flexbox (`flex-1`, `items-center`), grid systems, margins, paddings, and alignment.
+* **Design Tokens:** Always use Tailwind for background colors, typography sizes/weights, borders, border-radius, and absolute positioning constraints.
+* **Component States:** Use Tailwind for conditional rendering strings (e.g., `className={\`p-4 ${isActive ? 'bg-blue-600' : 'bg-gray-200'}\`}`).
+
+**2. StyleSheet.create() — The Functional Exception**
+Reserve `StyleSheet.create` exclusively for edge cases where Tailwind cannot operate due to compilation limits, deep prop trees, or heavy runtime logic.
+* **Dynamic Calculations:** Use StyleSheet when a value depends on explicit runtime math, device measurements, or state interpolation (e.g., `width: (windowWidth - 32) / 3`).
+* **Platform-Specific Logic:** Use StyleSheet when branching styling deeply based on `Platform.select({ ios: ..., android: ... })` (e.g., native shadows, elevations).
+* **Deep Component Props:** Use StyleSheet for sub-container props that strictly demand an Object instead of a string (e.g., `contentContainerStyle`, `columnWrapperStyle` in FlatLists/ScrollViews).
+* **Animations:** Use StyleSheet or inline styles when binding styles directly to Reanimated shared values or layout animation nodes.
+
+**3. Implementation Example**
+When writing components, combine them gracefully. Apply layout utilities inline and pass functional overrides as an array to `style`:
+
+```tsx
+// Example of the expected combination pattern
+import { Dimensions, Platform, StyleSheet, View, Text } from 'react-native';
+
+const { width } = Dimensions.get('window');
+
+export function ProductCard({ isFeatured }) {
+  return (
+    <View
+      className="p-4 rounded-xl bg-white border border-gray-200"
+      style={[styles.dynamicCard, isFeatured && styles.platformShadow]}
+    >
+      <Text className="text-lg font-bold text-gray-900">Product Title</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  dynamicCard: {
+    width: (width - 48) / 2, // Runtime layout math
+  },
+  platformShadow: {
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1 },
+      android: { elevation: 3 }
+    })
+  }
+});
+```
+
+**4. Refactoring Instructions**
+If you see existing code using inline object styles or massive `StyleSheet` blocks for simple flex containers, margins, or text styles, automatically refactor them to Tailwind CSS `className` utilities.
+
 ---
 
 ## 14. Design Inspiration to Look At
@@ -401,6 +459,10 @@ This section defines the exact build order. Each phase must be fully complete (b
 | **Clerk webhook** | ✅ Complete + verified | `convex/http.ts` `/clerk-webhook`, `users.upsertFromClerk` / `users.deleteFromClerk` internal mutations. Verified: fresh sign-up creates a `users` row + default `preferences` |
 | **Bottom tabs + header** | ✅ Complete | 4-tab bar (Inbox/Digest/Chat/Settings), `AppHeader` with back button |
 | **App shell** | ✅ Complete | Root layout, ClerkProvider, ConvexProviderWithClerk, theme provider, route guards |
+| **Backend architecture** | ✅ Complete | Layered `entries → service → repository` for all domains; `AppError` no-op patterns, `DbReader`/`DbWriter` confined to repositories; shipped on branch `refactor/layered-backend` |
+| **Frontend state & resilience** | ✅ Complete | Error boundary + retry, offline detection, skeleton loaders, canonical empty/error/loading states, custom pull-to-refresh, independent parallel data fetching |
+| **Priority Inbox Home (feed UI)** | ✅ Complete | Redesigned Inbox/Digest/Chat/Settings screens + headers; filter chips with live urgency counts; message cards; empty/loading/error states; Gmail OAuth connect wired |
+| **Gmail connect (native-first OAuth)** | ✅ Complete + tested on device | Native system account sheet via `expo-google-credential-auth` (Android Credential Manager / iOS GoogleSignIn) + in-app-browser fallback; backend token exchange, encrypted token storage, refresh-token self-heal on re-grant, disconnect that revokes on Google's side; `oauth-complete` deep-link route |
 
 ---
 
@@ -413,7 +475,7 @@ This section defines the exact build order. Each phase must be fully complete (b
 | Route | Purpose |
 |-------|---------|
 | `app/(tabs)/_layout.tsx` | Bottom tab bar: Inbox, Digest, Chat, Settings |
-| `app/(tabs)/index.tsx` | Inbox home (placeholder; Connect Gmail empty state arrives in Phase 2) |
+| `app/(tabs)/index.tsx` | Inbox home — priority feed, filter chips, states (Connect Gmail empty state present; OAuth wiring lands in Phase 2) |
 | `app/(tabs)/digest.tsx` | Digest placeholder |
 | `app/(tabs)/chat.tsx` | Chat placeholder |
 | `app/(tabs)/settings.tsx` | Settings placeholder |
@@ -438,33 +500,55 @@ This section defines the exact build order. Each phase must be fully complete (b
 
 ---
 
+### Phase 2 — Foundations: Frontend State & Resilience System
+
+**Goal:** Before any real data flows, the app needs a resilient shell so every screen renders a clear loading / empty / error state, detects when the device drops offline, and supports a premium pull-to-refresh. This was built up front (before Gmail OAuth) so Phase 2's real screens land on top of infrastructure instead of improvising states.
+
+**Completed components:**
+
+| Component | Purpose |
+|-----------|---------|
+| `ErrorBoundary` + `ErrorState` | Wraps each pager page; friendly fallback with "Try again" that remounts the page |
+| `AsyncView` | Declarative `loading / error / empty / data` renderer for any screen |
+| `EmptyState` | Vector-icon + soft-tint-circle state (brand/success/urgent/warning/muted tones) for "Connect inbox", "All caught up", etc. |
+| `ScreenSkeleton` | Shimmer skeletons (feed / digest / settings / generic) built on HeroUI `Skeleton` — never a blank screen |
+| `useNetworkStatus` + `OfflineBanner` | `expo-network` reachability; slim animated banner under the pager header when offline |
+| `RefreshableList` | Custom premium pull-to-refresh: drawn arc + spin (reanimated + svg) on iOS, branded native `RefreshControl` on Android |
+| `useQueryState` | Thin wrapper over Convex object-form `useQuery` that surfaces `loading / error / data` so screens never hang silently |
+| `useCurrentUser`, user profile, grouped settings | Settings screen with account card, grouped rows, sign-out |
+
+**How the Inbox screen is wired (all queries run in parallel, no waterfalls):**
+- `connectedInboxes.list` → gates "Connect your inbox" empty state
+- `messages.getCounts` → live counts on filter chips (Urgent · N, Today · N, Later · N)
+- `messages.getPriorityFeed` → paginated message feed (infinite scroll via `usePaginatedQuery`), sorted by AI urgency
+- `messages.markRead` → tapping an unread card marks it read (haptic feedback)
+- Digest tab reads `digests.getToday`; Settings reads `subscriptions.get` for the plan row
+
+**Side-quest fixed:** `messages.getPriorityFeed` / `search` returned `EMPTY_PAGE` with `as const` (a `readonly` page) which broke `usePaginatedQuery` — typed it as `PaginationResult<FeedItem>` so pagination typing matches.
+
+> Note: pull-to-refresh currently re-pulls the reactive feed (data arrives via Convex reactivity). A "true" re-sync gesture that triggers a Gmail sync action ships with the sync work in Phase 2.
+
+---
+
 ### Phase 2: Connect Inbox (Gmail OAuth) + Priority Inbox Feed
 
-**Goal:** User connects their first Gmail inbox directly from the Inbox tab when it's empty, then sees their email feed sorted by AI urgency.
+**Goal:** User connects their first Gmail inbox directly from the Inbox tab when it's empty, then sees their email feed sorted by AI urgency. **Frontend foundation above is built, and Gmail OAuth connect is fully working** — remaining work is the sync action that pulls real messages into the `messages` table and the classification pipeline that scores them.
 
-**Frontend routes:**
+**What was built for OAuth connect (now complete):**
 
-| Screen | Route | Components | Description |
-|--------|-------|------------|-------------|
-| Inbox Home | `(tabs)/index.tsx` | `InboxHeader`, `ConnectInboxCard` (empty state), `FilterChips`, `EmailCardList`, `EmptyState`, `UsageLimitBanner` | Greeting, empty state→Connect Gmail card, filter chips (Urgent/Today/Later), scrollable message cards |
-| Message Detail | `(inbox)/[messageId].tsx` | `MessageHeader`, `SummaryCard`, `EmailBody`, `ActionBar` | Back arrow, sender, subject, AI summary, cleaned body, action buttons |
+| Area | Files | Status |
+|------|-------|--------|
+| **Native auth client** | `expo-google-credential-auth@0.2.0` installed in `apps/native` | ✅ Android Credential Manager + iOS GoogleSignIn SDK |
+| **Native connect hook** | `apps/native/features/inbox/use-connect-inbox.ts` | ✅ Auto-retry on refresh-token suppression; toasts for feedback |
+| **Backend token exchange** | `packages/backend/convex/gmail/entries.ts` (`completeNativeConnect`) | ✅ Native path (no `redirect_uri`) + browser path (`/api/gmail/callback`) |
+| **Token storage** | `packages/backend/convex/gmail/oauth.ts` (WebCrypto AES-GCM encrypt/decrypt) | ✅ Encrypted with `GOOGLE_TOKEN_ENCRYPTION_KEY` |
+| **Refresh-token self-heal** | `gmail/oauth.ts` `completeNativeConnect` + `gmail/internal.ts` `getConnectedInboxByEmail` | ✅ Detects suppressed refresh token → revokes stale grant → auto-retry |
+| **Disconnect with revocation** | `gmail/oauth.ts` `disconnectAndRevoke` action → decrypt + Google revoke endpoint + cascade delete | ✅ Tested on device |
+| **Deep-link return route** | `apps/native/app/oauth-complete.tsx` + registered in `_layout.tsx` | ✅ Handles browser-flow redirect with auto-navigation |
+| **Env wiring** | `EXPO_PUBLIC_GOOGLE_CLIENT_ID` in `apps/native/.env` + `packages/env/src/native.ts` | ✅ Shared web client ID for native AuthorizationClient |
 
-**Reusable components to build:**
-
-| Component | Built from | Purpose |
-|-----------|-----------|---------|
-| `ConnectInboxCard` | HeroUI `Card` | Card with Google mark, "Choose an account" button, loading/success/error states |
-| `GoogleOAuthButton` | `expo-auth-session` + `expo-web-browser` | Opens Google consent screen |
-| `PriorityBadge` | HeroUI `Chip` | Urgency dot + label (urgent/today/later), optional pulse |
-| `EmailCard` | HeroUI `Card` + `GestureDetector` | Swipeable card: swipe right = handled, swipe left = snooze |
-| `FilterChips` | Horizontal `ScrollView` + HeroUI `Chip` | Urgent · N, Today · N, Later · N |
-| `InboxSourcePicker` | Horizontal `ScrollView` of avatars | Multi-inbox avatar picker (only if >1 inbox) |
-| `EmptyState` | Illustration + HeroUI `Text` | "All caught up" with floating animation |
-| `UsageLimitBanner` | Custom inline banner | "Daily limit reached" with CTA |
-
-**Backend needed:**
-- Gmail OAuth token exchange action — needs building
-- Gmail sync action — needs building
+**Backend still needed:**
+- Gmail sync action — needs building (pulls new messages per inbox using `history.list`)
 - `messages.insert` action — needs building (batch insert synced messages)
 - `messages.getPriorityFeed` — already built
 - `messages.get` — already built
@@ -475,15 +559,15 @@ This section defines the exact build order. Each phase must be fully complete (b
 - `feedback.upsert` mutation — needs building (for "Not Important" action)
 
 **Completion criteria:**
-- Inbox tab shows "Connect Gmail" empty state when no inbox is connected
-- User taps "Choose an account" → Google consent screen opens
-- User grants permission → tokens stored in `connectedInboxes`
-- First sync runs → messages appear in `messages` table
-- Inbox shows messages sorted by urgency
-- Filter chips filter by urgency level
-- Swipe right marks handled, swipe left opens snooze sheet
-- Tap opens message detail with AI summary
-- Empty state shows when no messages
+- ✅ Inbox tab shows "Connect Gmail" empty state when no inbox is connected
+- ✅ User taps "Connect Gmail" → Google account picker opens (native system sheet on Android/iOS, browser fallback on web)
+- ✅ User grants permission → tokens stored in `connectedInboxes` (encrypted)
+- ✅ Disconnect button revokes tokens on Google's side and clears local rows
+- ✅ Gmail sync action — needs building
+- Inbox shows messages sorted by urgency (waiting on sync)
+- Filter chips filter by urgency level (built, needs real data)
+- Swipe right marks handled, swipe left opens snooze sheet (built)
+- Tap opens message detail with AI summary (built)
 
 ---
 
@@ -753,8 +837,13 @@ This section defines the exact build order. Each phase must be fully complete (b
 ### Build Order Summary
 
 ```
-Phase 1:  App Shell — Clerk webhook, bottom tabs, reusable header   ← YOU ARE HERE
-Phase 2:  Connect Inbox (Gmail OAuth) + Priority Inbox Feed
+Phase 1:  App Shell — Clerk webhook, bottom tabs, reusable header   ✅ done
+Phase 2:  Connect Inbox (Gmail OAuth) + Priority Inbox Feed         ← YOU ARE HERE
+            Frontend foundation (states, skeleton, offline,
+            pull-to-refresh, redesigned screens)                    ✅ done
+            Gmail OAuth connect (native-first + browser fallback)   ✅ done
+            + disconnect w/ Google-side revocation, self-heal
+            Gmail sync + classification pipeline                    [ next ]
 Phase 3:  Message Actions & Feedback
 Phase 4:  Walkthrough Overlay
 Phase 5:  Daily Digest
